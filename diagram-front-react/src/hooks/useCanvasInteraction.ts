@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import {
+  doBoxesIntersect,
   getBoundingBox,
   isPointInArrowHandle,
   isPointInResizeHandle,
@@ -23,11 +24,12 @@ type DragState =
   | { mode: "creating-box"; id: string; start: Point } // rectangle
   | { mode: "creating-circle"; id: string }
   | { mode: "creating-arrow"; id: string }
-  | { mode: "moving"; id: string; lastCanvasPoint: Point }
+  | { mode: "moving"; ids: string[]; lastCanvasPoint: Point }
   | { mode: "resizing-box"; id: string; origin: Point } // rectangle/label
   | { mode: "resizing-circle"; id: string }
   | { mode: "resizing-arrow"; id: string; endpoint: "start" | "end" }
   | { mode: "panning"; lastScreenPoint: Point }
+  | { mode: "marquee"; start: Point } // shift+drag on empty canvas
   | null;
 
 // topmost shape under a point, matching Canvas's zIndex draw order
@@ -51,8 +53,14 @@ const distance = (a: Point, b: Point): number =>
   Math.hypot(a.x - b.x, a.y - b.y);
 
 /**
- * Wires pointer/wheel/keyboard input on the canvas to create, select, move,
- * resize, and delete shapes, plus pan (drag empty canvas) and zoom (wheel).
+ * Wires pointer/wheel/keyboard input on the canvas to create, select
+ * (single, shift-click multi, or marquee), move, resize, group/ungroup, and
+ * delete shapes, plus pan (drag empty canvas) and zoom (wheel).
+ *
+ * Gesture note: plain drag on empty canvas pans (unchanged from Stage 1);
+ * Shift+drag on empty canvas marquee-selects instead, reusing Shift as the
+ * same "additive/multi" modifier it already is for click.
+ *
  * Attaches its own native listeners — wheel needs `{ passive: false }` to
  * reliably preventDefault the page-zoom/scroll, which React's synthetic
  * onWheel doesn't guarantee.
@@ -68,14 +76,20 @@ export const useCanvasInteraction = (
 
     // no toolbar exists yet (out of scope until shadcn/ui components land),
     // so tool switching and delete are keyboard-only for now: R/C/A/L pick a
-    // shape tool, Escape goes back to select tool and deselects,
-    // Delete/Backspace removes the selected shape
+    // shape tool, G/U group/ungroup the selection, Escape goes back to
+    // select tool and deselects, Delete/Backspace removes the selection
     const handleKeyDown = (e: KeyboardEvent) => {
-      const { selectedId, removeShape, setTool, selectShape } =
-        useCanvasStore.getState();
+      const {
+        selectedIds,
+        removeShape,
+        setTool,
+        selectShape,
+        groupSelected,
+        ungroupSelected,
+      } = useCanvasStore.getState();
 
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedId) removeShape(selectedId);
+        for (const id of selectedIds) removeShape(id);
       } else if (e.key === "r" || e.key === "R") {
         setTool("rectangle");
       } else if (e.key === "c" || e.key === "C") {
@@ -84,6 +98,9 @@ export const useCanvasInteraction = (
         setTool("arrow");
       } else if (e.key === "l" || e.key === "L") {
         setTool("label");
+      } else if (e.key === "g" || e.key === "G") {
+        if (e.shiftKey) ungroupSelected();
+        else groupSelected();
       } else if (e.key === "Escape") {
         setTool("select");
         selectShape(null);
@@ -124,8 +141,15 @@ export const useCanvasInteraction = (
 
     const handlePointerDown = (e: PointerEvent) => {
       canvas.setPointerCapture(e.pointerId);
-      const { shapes, selectedId, tool, viewport, addShape, selectShape } =
-        useCanvasStore.getState();
+      const {
+        shapes,
+        selectedIds,
+        tool,
+        viewport,
+        addShape,
+        selectShape,
+        toggleSelect,
+      } = useCanvasStore.getState();
       const screenPoint = toScreenPoint(e, canvas);
       const canvasPoint = screenToCanvas(screenPoint, viewport);
 
@@ -185,41 +209,42 @@ export const useCanvasInteraction = (
         return;
       }
 
-      // select tool: resize handle (type-specific) > move > pan
-      const selectedShape = selectedId ? shapes[selectedId] : undefined;
-      if (selectedShape) {
+      // select tool: resize handle (single selection, type-specific) > move > pan/marquee
+      const singleSelected =
+        selectedIds.length === 1 ? shapes[selectedIds[0]] : undefined;
+      if (singleSelected) {
         if (
-          (selectedShape.type === "rectangle" ||
-            selectedShape.type === "label") &&
-          isPointInResizeHandle(canvasPoint, selectedShape)
+          (singleSelected.type === "rectangle" ||
+            singleSelected.type === "label") &&
+          isPointInResizeHandle(canvasPoint, singleSelected)
         ) {
           dragRef.current = {
             mode: "resizing-box",
-            id: selectedShape.id,
-            origin: { x: selectedShape.x, y: selectedShape.y },
+            id: singleSelected.id,
+            origin: { x: singleSelected.x, y: singleSelected.y },
           };
           return;
         }
         if (
-          selectedShape.type === "circle" &&
-          isPointInResizeHandle(canvasPoint, selectedShape)
+          singleSelected.type === "circle" &&
+          isPointInResizeHandle(canvasPoint, singleSelected)
         ) {
-          dragRef.current = { mode: "resizing-circle", id: selectedShape.id };
+          dragRef.current = { mode: "resizing-circle", id: singleSelected.id };
           return;
         }
-        if (selectedShape.type === "arrow") {
-          if (isPointInArrowHandle(canvasPoint, selectedShape, "start")) {
+        if (singleSelected.type === "arrow") {
+          if (isPointInArrowHandle(canvasPoint, singleSelected, "start")) {
             dragRef.current = {
               mode: "resizing-arrow",
-              id: selectedShape.id,
+              id: singleSelected.id,
               endpoint: "start",
             };
             return;
           }
-          if (isPointInArrowHandle(canvasPoint, selectedShape, "end")) {
+          if (isPointInArrowHandle(canvasPoint, singleSelected, "end")) {
             dragRef.current = {
               mode: "resizing-arrow",
-              id: selectedShape.id,
+              id: singleSelected.id,
               endpoint: "end",
             };
             return;
@@ -229,12 +254,23 @@ export const useCanvasInteraction = (
 
       const hit = findShapeAt(canvasPoint, shapes);
       if (hit) {
-        selectShape(hit.id);
-        dragRef.current = {
-          mode: "moving",
-          id: hit.id,
-          lastCanvasPoint: canvasPoint,
-        };
+        if (e.shiftKey) {
+          // shift-click only toggles selection — it doesn't start a drag
+          toggleSelect(hit.id);
+          return;
+        }
+        // dragging a shape that's already part of a multi-selection moves
+        // the whole selection; otherwise this click replaces it (expanding
+        // to the clicked shape's group, if any) — selectShape is synchronous,
+        // so re-reading selectedIds after it reflects whichever case applies
+        if (!selectedIds.includes(hit.id)) selectShape(hit.id);
+        const ids = useCanvasStore.getState().selectedIds;
+        dragRef.current = { mode: "moving", ids, lastCanvasPoint: canvasPoint };
+        return;
+      }
+
+      if (e.shiftKey) {
+        dragRef.current = { mode: "marquee", start: canvasPoint };
         return;
       }
 
@@ -246,7 +282,7 @@ export const useCanvasInteraction = (
       const drag = dragRef.current;
       if (!drag) return;
 
-      const { shapes, viewport, updateShape, setViewport } =
+      const { shapes, viewport, updateShape, setViewport, setMarqueeRect } =
         useCanvasStore.getState();
       const screenPoint = toScreenPoint(e, canvas);
 
@@ -263,6 +299,28 @@ export const useCanvasInteraction = (
       }
 
       const canvasPoint = screenToCanvas(screenPoint, viewport);
+
+      if (drag.mode === "marquee") {
+        setMarqueeRect({
+          x: Math.min(drag.start.x, canvasPoint.x),
+          y: Math.min(drag.start.y, canvasPoint.y),
+          width: Math.abs(canvasPoint.x - drag.start.x),
+          height: Math.abs(canvasPoint.y - drag.start.y),
+        });
+        return;
+      }
+
+      if (drag.mode === "moving") {
+        const dx = canvasPoint.x - drag.lastCanvasPoint.x;
+        const dy = canvasPoint.y - drag.lastCanvasPoint.y;
+        for (const id of drag.ids) {
+          const shape = shapes[id];
+          if (shape) updateShape(id, translateShape(shape, dx, dy));
+        }
+        dragRef.current = { ...drag, lastCanvasPoint: canvasPoint };
+        return;
+      }
+
       const shape = shapes[drag.id];
       if (!shape) return;
 
@@ -283,13 +341,6 @@ export const useCanvasInteraction = (
         case "creating-arrow":
           updateShape(drag.id, { x2: canvasPoint.x, y2: canvasPoint.y });
           break;
-        case "moving": {
-          const dx = canvasPoint.x - drag.lastCanvasPoint.x;
-          const dy = canvasPoint.y - drag.lastCanvasPoint.y;
-          updateShape(drag.id, translateShape(shape, dx, dy));
-          dragRef.current = { ...drag, lastCanvasPoint: canvasPoint };
-          break;
-        }
         case "resizing-box":
           updateShape(drag.id, {
             width: canvasPoint.x - drag.origin.x,
@@ -317,10 +368,29 @@ export const useCanvasInteraction = (
     const handlePointerUp = () => {
       const drag = dragRef.current;
       dragRef.current = null;
-      if (!drag || drag.mode === "panning") return;
+      if (!drag || drag.mode === "panning" || drag.mode === "moving") return;
 
-      const { shapes, updateShape, removeShape, selectShape, setTool } =
-        useCanvasStore.getState();
+      const {
+        shapes,
+        updateShape,
+        removeShape,
+        selectShape,
+        setTool,
+        setMarqueeRect,
+        addToSelection,
+      } = useCanvasStore.getState();
+
+      if (drag.mode === "marquee") {
+        const rect = useCanvasStore.getState().marqueeRect;
+        setMarqueeRect(null);
+        if (!rect) return;
+        const hitIds = Object.values(shapes)
+          .filter((s) => doBoxesIntersect(getBoundingBox(s), rect))
+          .map((s) => s.id);
+        if (hitIds.length > 0) addToSelection(hitIds);
+        return;
+      }
+
       const shape = shapes[drag.id];
 
       if (drag.mode === "creating-box" || drag.mode === "resizing-box") {

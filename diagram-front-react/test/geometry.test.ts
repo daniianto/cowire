@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getBoundingBox,
   getGroupBoundingBox,
+  doBoxesIntersect,
   isPointInShape,
   isPointInResizeHandle,
   isPointInArrowHandle,
@@ -138,6 +139,35 @@ describe("getGroupBoundingBox", () => {
       width: 0,
       height: 0,
     });
+  });
+});
+
+describe("doBoxesIntersect", () => {
+  const box = { x: 10, y: 10, width: 20, height: 20 }; // (10,10)-(30,30)
+
+  it("returns true for overlapping boxes", () => {
+    expect(doBoxesIntersect(box, { x: 20, y: 20, width: 20, height: 20 })).toBe(
+      true
+    );
+  });
+
+  it("returns true when one box fully contains the other", () => {
+    expect(doBoxesIntersect(box, { x: 15, y: 15, width: 5, height: 5 })).toBe(
+      true
+    );
+  });
+
+  it("returns false for boxes that don't touch", () => {
+    expect(
+      doBoxesIntersect(box, { x: 100, y: 100, width: 10, height: 10 })
+    ).toBe(false);
+  });
+
+  it("returns false for boxes that only touch at an edge", () => {
+    // b starts exactly where box ends — no actual overlap area
+    expect(doBoxesIntersect(box, { x: 30, y: 10, width: 10, height: 10 })).toBe(
+      false
+    );
   });
 });
 

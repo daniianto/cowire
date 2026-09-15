@@ -112,6 +112,13 @@ export const getBoundingBox = (shape: Shape): BoundingBox => {
   }
 };
 
+/** Whether two bounding boxes overlap at all (used for marquee/rubber-band selection). */
+export const doBoxesIntersect = (a: BoundingBox, b: BoundingBox): boolean =>
+  a.x < b.x + b.width &&
+  a.x + a.width > b.x &&
+  a.y < b.y + b.height &&
+  a.y + a.height > b.y;
+
 /** Bounding box of a group of shapes — the union of their individual boxes. */
 export const getGroupBoundingBox = (shapes: Shape[]): BoundingBox => {
   if (shapes.length === 0) return { x: 0, y: 0, width: 0, height: 0 };

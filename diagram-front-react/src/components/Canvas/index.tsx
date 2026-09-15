@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 import { renderShape } from "@/components/ShapeRenderer";
-import { renderSelectionBox } from "@/components/SelectionBox";
+import {
+  renderGroupSelectionBox,
+  renderMarquee,
+  renderSelectionBox,
+} from "@/components/SelectionBox";
 import { useCanvasInteraction } from "@/hooks/useCanvasInteraction";
 import { useCanvasStore } from "@/state";
 
@@ -32,7 +36,8 @@ export const Canvas = () => {
     let frameId: number;
     const draw = () => {
       const dpr = window.devicePixelRatio || 1;
-      const { shapes, selectedId, viewport } = useCanvasStore.getState();
+      const { shapes, selectedIds, viewport, marqueeRect } =
+        useCanvasStore.getState();
 
       ctx.save();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -46,8 +51,15 @@ export const Canvas = () => {
       for (const shape of inZOrder) {
         renderShape(ctx, shape);
       }
-      const selected = selectedId ? shapes[selectedId] : undefined;
-      if (selected) renderSelectionBox(ctx, selected);
+      const selectedShapes = selectedIds
+        .map((id) => shapes[id])
+        .filter((s): s is NonNullable<typeof s> => Boolean(s));
+      if (selectedShapes.length === 1) {
+        renderSelectionBox(ctx, selectedShapes[0]);
+      } else if (selectedShapes.length > 1) {
+        renderGroupSelectionBox(ctx, selectedShapes);
+      }
+      if (marqueeRect) renderMarquee(ctx, marqueeRect);
 
       ctx.restore();
       frameId = requestAnimationFrame(draw);
