@@ -24,10 +24,22 @@ type DragState =
   | { mode: "creating-box"; id: string; start: Point } // rectangle
   | { mode: "creating-circle"; id: string }
   | { mode: "creating-arrow"; id: string }
-  | { mode: "moving"; ids: string[]; lastCanvasPoint: Point }
-  | { mode: "resizing-box"; id: string; origin: Point } // rectangle/label
-  | { mode: "resizing-circle"; id: string }
-  | { mode: "resizing-arrow"; id: string; endpoint: "start" | "end" }
+  // `committed` is lazy history-commit tracking: a gesture that never
+  // actually moves the pointer shouldn't push a wasted undo step
+  | {
+      mode: "moving";
+      ids: string[];
+      lastCanvasPoint: Point;
+      committed: boolean;
+    }
+  | { mode: "resizing-box"; id: string; origin: Point; committed: boolean } // rectangle/label
+  | { mode: "resizing-circle"; id: string; committed: boolean }
+  | {
+      mode: "resizing-arrow";
+      id: string;
+      endpoint: "start" | "end";
+      committed: boolean;
+    }
   | { mode: "panning"; lastScreenPoint: Point }
   | { mode: "marquee"; start: Point } // shift+drag on empty canvas
   | null;
@@ -54,12 +66,18 @@ const distance = (a: Point, b: Point): number =>
 
 /**
  * Wires pointer/wheel/keyboard input on the canvas to create, select
- * (single, shift-click multi, or marquee), move, resize, group/ungroup, and
- * delete shapes, plus pan (drag empty canvas) and zoom (wheel).
+ * (single, shift-click multi, or marquee), move, resize, group/ungroup,
+ * reorder, undo/redo, and delete shapes, plus pan (drag empty canvas) and
+ * zoom (wheel).
  *
  * Gesture note: plain drag on empty canvas pans (unchanged from Stage 1);
  * Shift+drag on empty canvas marquee-selects instead, reusing Shift as the
  * same "additive/multi" modifier it already is for click.
+ *
+ * Undo/redo note: history is committed at gesture boundaries (before a
+ * create/move/resize starts, or before a one-shot action like group/delete),
+ * never on every intermediate update — otherwise undo would only revert one
+ * animation frame of a drag instead of the whole gesture.
  *
  * Attaches its own native listeners — wheel needs `{ passive: false }` to
  * reliably preventDefault the page-zoom/scroll, which React's synthetic
@@ -75,9 +93,11 @@ export const useCanvasInteraction = (
     if (!canvas) return;
 
     // no toolbar exists yet (out of scope until shadcn/ui components land),
-    // so tool switching and delete are keyboard-only for now: R/C/A/L pick a
-    // shape tool, G/U group/ungroup the selection, Escape goes back to
-    // select tool and deselects, Delete/Backspace removes the selection
+    // so tool switching, grouping, reordering, undo/redo, and delete are all
+    // keyboard-only: R/C/A/L pick a shape tool, G/Shift+G group/ungroup,
+    // ]/[ bring-to-front/send-to-back, Cmd|Ctrl+Z/Shift+Z undo/redo, Escape
+    // goes back to select tool and deselects, Delete/Backspace removes the
+    // selection
     const handleKeyDown = (e: KeyboardEvent) => {
       const {
         selectedIds,
@@ -86,10 +106,23 @@ export const useCanvasInteraction = (
         selectShape,
         groupSelected,
         ungroupSelected,
+        bringSelectedToFront,
+        sendSelectedToBack,
+        commitHistory,
+        undo,
+        redo,
       } = useCanvasStore.getState();
+      const cmdOrCtrl = e.metaKey || e.ctrlKey;
 
-      if (e.key === "Delete" || e.key === "Backspace") {
-        for (const id of selectedIds) removeShape(id);
+      if (cmdOrCtrl && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedIds.length > 0) {
+          commitHistory();
+          for (const id of selectedIds) removeShape(id);
+        }
       } else if (e.key === "r" || e.key === "R") {
         setTool("rectangle");
       } else if (e.key === "c" || e.key === "C") {
@@ -99,8 +132,29 @@ export const useCanvasInteraction = (
       } else if (e.key === "l" || e.key === "L") {
         setTool("label");
       } else if (e.key === "g" || e.key === "G") {
-        if (e.shiftKey) ungroupSelected();
-        else groupSelected();
+        if (e.shiftKey) {
+          if (
+            selectedIds.some(
+              (id) => useCanvasStore.getState().shapes[id]?.groupId
+            )
+          ) {
+            commitHistory();
+            ungroupSelected();
+          }
+        } else if (selectedIds.length >= 2) {
+          commitHistory();
+          groupSelected();
+        }
+      } else if (e.key === "]") {
+        if (selectedIds.length > 0) {
+          commitHistory();
+          bringSelectedToFront();
+        }
+      } else if (e.key === "[") {
+        if (selectedIds.length > 0) {
+          commitHistory();
+          sendSelectedToBack();
+        }
       } else if (e.key === "Escape") {
         setTool("select");
         selectShape(null);
@@ -112,7 +166,8 @@ export const useCanvasInteraction = (
     // prompt() — the only zero-dependency text entry available without a
     // real UI component library
     const createLabelAt = (point: Point) => {
-      const { addShape, selectShape, setTool } = useCanvasStore.getState();
+      const { addShape, selectShape, setTool, commitHistory } =
+        useCanvasStore.getState();
       const text = window.prompt("Label text:");
       setTool("select");
       if (!text) return;
@@ -135,6 +190,7 @@ export const useCanvasInteraction = (
         fontSize: DEFAULT_FONT_SIZE,
         color: DEFAULT_SHAPE_COLOR,
       };
+      commitHistory();
       addShape(shape);
       selectShape(shape.id);
     };
@@ -149,6 +205,7 @@ export const useCanvasInteraction = (
         addShape,
         selectShape,
         toggleSelect,
+        commitHistory,
       } = useCanvasStore.getState();
       const screenPoint = toScreenPoint(e, canvas);
       const canvasPoint = screenToCanvas(screenPoint, viewport);
@@ -163,6 +220,7 @@ export const useCanvasInteraction = (
           height: 0,
           color: DEFAULT_SHAPE_COLOR,
         };
+        commitHistory();
         addShape(shape);
         selectShape(shape.id);
         dragRef.current = {
@@ -182,6 +240,7 @@ export const useCanvasInteraction = (
           radius: 0,
           color: DEFAULT_SHAPE_COLOR,
         };
+        commitHistory();
         addShape(shape);
         selectShape(shape.id);
         dragRef.current = { mode: "creating-circle", id: shape.id };
@@ -198,6 +257,7 @@ export const useCanvasInteraction = (
           y2: canvasPoint.y,
           color: DEFAULT_ARROW_COLOR,
         };
+        commitHistory();
         addShape(shape);
         selectShape(shape.id);
         dragRef.current = { mode: "creating-arrow", id: shape.id };
@@ -222,6 +282,7 @@ export const useCanvasInteraction = (
             mode: "resizing-box",
             id: singleSelected.id,
             origin: { x: singleSelected.x, y: singleSelected.y },
+            committed: false,
           };
           return;
         }
@@ -229,7 +290,11 @@ export const useCanvasInteraction = (
           singleSelected.type === "circle" &&
           isPointInResizeHandle(canvasPoint, singleSelected)
         ) {
-          dragRef.current = { mode: "resizing-circle", id: singleSelected.id };
+          dragRef.current = {
+            mode: "resizing-circle",
+            id: singleSelected.id,
+            committed: false,
+          };
           return;
         }
         if (singleSelected.type === "arrow") {
@@ -238,6 +303,7 @@ export const useCanvasInteraction = (
               mode: "resizing-arrow",
               id: singleSelected.id,
               endpoint: "start",
+              committed: false,
             };
             return;
           }
@@ -246,6 +312,7 @@ export const useCanvasInteraction = (
               mode: "resizing-arrow",
               id: singleSelected.id,
               endpoint: "end",
+              committed: false,
             };
             return;
           }
@@ -265,7 +332,12 @@ export const useCanvasInteraction = (
         // so re-reading selectedIds after it reflects whichever case applies
         if (!selectedIds.includes(hit.id)) selectShape(hit.id);
         const ids = useCanvasStore.getState().selectedIds;
-        dragRef.current = { mode: "moving", ids, lastCanvasPoint: canvasPoint };
+        dragRef.current = {
+          mode: "moving",
+          ids,
+          lastCanvasPoint: canvasPoint,
+          committed: false,
+        };
         return;
       }
 
@@ -282,8 +354,14 @@ export const useCanvasInteraction = (
       const drag = dragRef.current;
       if (!drag) return;
 
-      const { shapes, viewport, updateShape, setViewport, setMarqueeRect } =
-        useCanvasStore.getState();
+      const {
+        shapes,
+        viewport,
+        updateShape,
+        setViewport,
+        setMarqueeRect,
+        commitHistory,
+      } = useCanvasStore.getState();
       const screenPoint = toScreenPoint(e, canvas);
 
       if (drag.mode === "panning") {
@@ -311,13 +389,18 @@ export const useCanvasInteraction = (
       }
 
       if (drag.mode === "moving") {
+        if (!drag.committed) commitHistory();
         const dx = canvasPoint.x - drag.lastCanvasPoint.x;
         const dy = canvasPoint.y - drag.lastCanvasPoint.y;
         for (const id of drag.ids) {
           const shape = shapes[id];
           if (shape) updateShape(id, translateShape(shape, dx, dy));
         }
-        dragRef.current = { ...drag, lastCanvasPoint: canvasPoint };
+        dragRef.current = {
+          ...drag,
+          lastCanvasPoint: canvasPoint,
+          committed: true,
+        };
         return;
       }
 
@@ -342,25 +425,31 @@ export const useCanvasInteraction = (
           updateShape(drag.id, { x2: canvasPoint.x, y2: canvasPoint.y });
           break;
         case "resizing-box":
+          if (!drag.committed) commitHistory();
           updateShape(drag.id, {
             width: canvasPoint.x - drag.origin.x,
             height: canvasPoint.y - drag.origin.y,
           });
+          dragRef.current = { ...drag, committed: true };
           break;
         case "resizing-circle":
           if (shape.type === "circle") {
+            if (!drag.committed) commitHistory();
             updateShape(drag.id, {
               radius: distance({ x: shape.x, y: shape.y }, canvasPoint),
             });
+            dragRef.current = { ...drag, committed: true };
           }
           break;
         case "resizing-arrow":
+          if (!drag.committed) commitHistory();
           updateShape(
             drag.id,
             drag.endpoint === "start"
               ? { x1: canvasPoint.x, y1: canvasPoint.y }
               : { x2: canvasPoint.x, y2: canvasPoint.y }
           );
+          dragRef.current = { ...drag, committed: true };
           break;
       }
     };

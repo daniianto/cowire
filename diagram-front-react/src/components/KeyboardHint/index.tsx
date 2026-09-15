@@ -13,6 +13,7 @@ export const KeyboardHint = () => (
   >
     R/C/A/L: rectangle/circle/arrow/label · drag: create / move / pan · shift+
     click: multi-select · shift+drag: marquee select · G / shift+G: group /
-    ungroup · wheel: zoom · Delete: remove · Esc: select tool
+    ungroup · ] / [: front / back · cmd/ctrl+Z / shift+Z: undo / redo · wheel:
+    zoom · Delete: remove · Esc: select tool
   </div>
 );

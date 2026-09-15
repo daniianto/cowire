@@ -12,6 +12,10 @@ const groupMembers = (shapes: Record<string, Shape>, id: string): string[] => {
     .map((s) => s.id);
 };
 
+// undo/redo snapshots only shapes — viewport/selection/tool aren't "edits"
+type HistoryEntry = { shapes: Record<string, Shape> };
+const MAX_HISTORY = 50;
+
 type CanvasState = {
   shapes: Record<string, Shape>;
   selectedIds: string[];
@@ -19,6 +23,8 @@ type CanvasState = {
   viewport: Viewport;
   // in-progress marquee/rubber-band rect (canvas space), or null when not dragging one
   marqueeRect: BoundingBox | null;
+  past: HistoryEntry[];
+  future: HistoryEntry[];
 
   // zIndex/groupId are bookkeeping the store owns: new shapes always start
   // on top of everything else and ungrouped
@@ -34,10 +40,20 @@ type CanvasState = {
   addToSelection: (ids: string[]) => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
+  bringSelectedToFront: () => void;
+  sendSelectedToBack: () => void;
 
   setTool: (tool: Tool) => void;
   setViewport: (viewport: Viewport) => void;
   setMarqueeRect: (rect: BoundingBox | null) => void;
+
+  // snapshots current shapes onto the undo stack — call this right before a
+  // discrete edit (a whole drag gesture, a group/ungroup, a delete), never
+  // per intermediate update, or undo would only revert one animation frame
+  // at a time instead of one meaningful action
+  commitHistory: () => void;
+  undo: () => void;
+  redo: () => void;
 };
 
 export const useCanvasStore = create<CanvasState>((set) => ({
@@ -46,6 +62,8 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   tool: "select",
   viewport: { offsetX: 0, offsetY: 0, zoom: 1 },
   marqueeRect: null,
+  past: [],
+  future: [],
 
   addShape: (shape) =>
     set((state) => {
@@ -131,7 +149,75 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       return { shapes };
     }),
 
+  bringSelectedToFront: () =>
+    set((state) => {
+      if (state.selectedIds.length === 0) return state;
+      const topZIndex = Object.values(state.shapes).reduce(
+        (max, s) => Math.max(max, s.zIndex),
+        -1
+      );
+      const shapes = { ...state.shapes };
+      state.selectedIds.forEach((id, i) => {
+        const shape = shapes[id];
+        if (shape) shapes[id] = { ...shape, zIndex: topZIndex + 1 + i };
+      });
+      return { shapes };
+    }),
+
+  sendSelectedToBack: () =>
+    set((state) => {
+      if (state.selectedIds.length === 0) return state;
+      const bottomZIndex = Object.values(state.shapes).reduce(
+        (min, s) => Math.min(min, s.zIndex),
+        0
+      );
+      const shapes = { ...state.shapes };
+      state.selectedIds.forEach((id, i) => {
+        const shape = shapes[id];
+        if (shape) {
+          shapes[id] = {
+            ...shape,
+            zIndex: bottomZIndex - state.selectedIds.length + i,
+          };
+        }
+      });
+      return { shapes };
+    }),
+
   setTool: (tool) => set({ tool }),
   setViewport: (viewport) => set({ viewport }),
   setMarqueeRect: (rect) => set({ marqueeRect: rect }),
+
+  commitHistory: () =>
+    set((state) => ({
+      past: [...state.past, { shapes: state.shapes }].slice(-MAX_HISTORY),
+      future: [],
+    })),
+
+  undo: () =>
+    set((state) => {
+      if (state.past.length === 0) return state;
+      const previous = state.past[state.past.length - 1];
+      return {
+        shapes: previous.shapes,
+        selectedIds: state.selectedIds.filter((id) => previous.shapes[id]),
+        past: state.past.slice(0, -1),
+        future: [{ shapes: state.shapes }, ...state.future].slice(
+          0,
+          MAX_HISTORY
+        ),
+      };
+    }),
+
+  redo: () =>
+    set((state) => {
+      if (state.future.length === 0) return state;
+      const next = state.future[0];
+      return {
+        shapes: next.shapes,
+        selectedIds: state.selectedIds.filter((id) => next.shapes[id]),
+        past: [...state.past, { shapes: state.shapes }].slice(-MAX_HISTORY),
+        future: state.future.slice(1),
+      };
+    }),
 }));
