@@ -3,8 +3,8 @@
 Cross-stage rules that apply regardless of which `STAGE_N.md` is active. Stage docs assume these; they shouldn't repeat them.
 
 ## Monorepo layout
-- npm workspaces, one package per concern, prefixed with the project name (e.g. `<project>-front-react`, `<project>-supabase-wrapper`, `<project>-crdt-core`)
-- Root `package.json` scripts delegate into workspaces: `build:<pkg>`, `dev:<pkg>`, plus `db:pull` / `db:push` / `gen:types` / `migration` for the Supabase package once persistence lands
+- npm workspaces, one package per concern, prefixed with the project name (e.g. `<project>-front-react`, `<project>-supabase-wrapper`, `<project>-crdt-core`) — exception: the raw Supabase CLI project is just `supabase`, unprefixed (see Supabase section)
+- Root `package.json` scripts delegate into workspaces: `build:<pkg>`, `dev:<pkg>`
 
 ## Structure (type-oriented)
 Within a frontend package, organize by role, not by feature:
@@ -37,6 +37,13 @@ This codebase's actual style is comment-friendly, not comment-averse:
 - Short, lowercase, present-tense inline comments above non-trivial steps inside a function (e.g. `// transform screen coords into canvas space before hit-testing`)
 - JSDoc-style block comments (`/** ... */`) above exported functions/hooks that do non-obvious work, describing what it does and (when relevant) params
 - Keep following this style even though it's more verbose than the general default
+
+## Supabase (relevant once persistence lands, Stage 3+)
+- `supabase` is its own unprefixed workspace package: `config.toml`, `migrations/`, and generated `database.types.ts` live there — separate from `<project>-supabase-wrapper`, the hand-written TS abstraction layer over the client
+- Migrations are hand-authored first, not pulled: run `migration:` (`supabase migration new <name>`, named for what it does) to create the file, write the SQL, then `db:push` to apply it. This keeps schema changes reviewable in a PR and reproducible across environments — important since this project is co-op/multi-collaborator, unlike the solo prior projects this convention set was drawn from
+- `db:pull` is a fallback for reconciliation only (e.g. someone made an out-of-band change in the Studio dashboard) — not the everyday workflow; a pulled migration should be renamed from the auto-generated `..._remote_schema.sql` to describe what it does
+- `database.types.ts` is always generated via `gen:types`, never hand-edited — regenerate after every schema change and commit the result so the wrapper package gets compile-time schema safety
+- Root scripts (all `cd supabase && supabase ...`): `db:pull`, `db:push`, `migration`, `gen:types`
 
 ## Performance
 This app leans on co-op (multi-user, concurrent) editing, so rendering and merge logic need to stay fast as shape count and collaborator count grow — see `ROADMAP.md` for why stages are ordered the way they are.
