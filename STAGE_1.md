@@ -15,6 +15,7 @@ Rendering + interaction fundamentals working before any data model complexity.
 - Create / select / move / resize / delete
 - Local React state only — no persistence, no backend
 - GitHub Actions CI: lint + format check + test on every push (no deploy workflow yet — see `ROADMAP.md`)
+- On-screen keyboard-shortcut hint (no toolbar yet, so interaction is otherwise undiscoverable)
 
 ### Structure
 
@@ -28,6 +29,8 @@ diagram-front-react/            # first workspace package; root package.json gai
 │   │   │   └── index.tsx        # renders a rectangle shape
 │   │   ├── SelectionBox/
 │   │   │   └── index.tsx
+│   │   ├── KeyboardHint/
+│   │   │   └── index.tsx        # on-screen shortcut hint — no toolbar exists yet, so this is the only affordance
 │   │   └── index.ts             # barrel: export * from "./Canvas", etc.
 │   ├── hooks/
 │   │   └── useCanvasInteraction.ts   # pointer events -> select/move/resize/create/delete
