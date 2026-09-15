@@ -57,4 +57,4 @@ type Shape = {
 - `geometry.test.ts` — hit-testing (point-in-shape), bounding box math, pan/zoom coordinate transform
 
 ### Out of scope
-Other shape types, groups, persistence, multiplayer, undo/redo, shadcn/ui components (no forms/dialogs needed yet).
+Other shape types, groups, persistence, multiplayer, undo/redo, shadcn/ui components (no forms/dialogs needed yet), touch/mobile canvas input (mouse/pointer only for now — touch support is a Stage 7 Polish item).

@@ -62,6 +62,7 @@ This app leans on co-op (multi-user, concurrent) editing, so rendering and merge
 - Hit-testing, bounding-box math, and any per-frame canvas work should stay correct-but-cheap at small shape counts now; revisit algorithmic complexity (spatial indexing, dirty-region redraw) before it becomes the bottleneck, not preemptively
 - Collaborative updates (Broadcast in Stage 4, Yjs in Stage 5+) should batch/debounce rather than send one message per pointer-move or keystroke
 - Profile before optimizing — don't hand-tune based on guesses; when a stage doc calls out a specific perf target or measurement, treat it as a checkpoint to hit before moving to the next stage
+- Known risk: Stage 2's undo/redo is built local-only, before any collaborative editing exists. Undo under concurrent multi-user edits is a known hard problem (this is why Yjs ships its own `UndoManager`) — expect Stage 2's implementation to need rework, not just wiring-up, once Stage 5's CRDT lands
 
 ## Testing
 - Vitest, not colocated — tests live in a top-level `test/` directory per package (e.g. `<package>/test/geometry.test.ts`)
