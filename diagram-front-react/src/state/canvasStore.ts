@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { NewShape, Shape, Viewport } from "@/lib/geometry";
 
-export type Tool = "select" | "rectangle";
+export type Tool = "select" | "rectangle" | "circle" | "arrow" | "label";
 
 type CanvasState = {
   shapes: Record<string, Shape>;

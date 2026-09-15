@@ -11,7 +11,7 @@ export const KeyboardHint = () => (
       pointerEvents: "none",
     }}
   >
-    R: rectangle tool · drag: create / move / pan · wheel: zoom · Delete: remove
-    · Esc: select tool
+    R: rectangle · C: circle · A: arrow · L: label · drag: create / move / pan ·
+    wheel: zoom · Delete: remove · Esc: select tool
   </div>
 );

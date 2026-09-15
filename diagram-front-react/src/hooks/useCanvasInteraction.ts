@@ -1,6 +1,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 import {
   getBoundingBox,
+  isPointInArrowHandle,
   isPointInResizeHandle,
   isPointInShape,
   screenToCanvas,
@@ -12,13 +13,20 @@ import {
 import { useCanvasStore } from "@/state";
 
 const DEFAULT_SHAPE_COLOR = "#94a3b8";
+const DEFAULT_ARROW_COLOR = "#334155";
+const DEFAULT_FONT_SIZE = 16;
+const LABEL_PADDING = 8;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 8;
 
 type DragState =
-  | { mode: "creating"; id: string; start: Point }
+  | { mode: "creating-box"; id: string; start: Point } // rectangle
+  | { mode: "creating-circle"; id: string }
+  | { mode: "creating-arrow"; id: string }
   | { mode: "moving"; id: string; lastCanvasPoint: Point }
-  | { mode: "resizing"; id: string; origin: Point }
+  | { mode: "resizing-box"; id: string; origin: Point } // rectangle/label
+  | { mode: "resizing-circle"; id: string }
+  | { mode: "resizing-arrow"; id: string; endpoint: "start" | "end" }
   | { mode: "panning"; lastScreenPoint: Point }
   | null;
 
@@ -39,6 +47,9 @@ const toScreenPoint = (
   return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 };
 
+const distance = (a: Point, b: Point): number =>
+  Math.hypot(a.x - b.x, a.y - b.y);
+
 /**
  * Wires pointer/wheel/keyboard input on the canvas to create, select, move,
  * resize, and delete shapes, plus pan (drag empty canvas) and zoom (wheel).
@@ -56,9 +67,9 @@ export const useCanvasInteraction = (
     if (!canvas) return;
 
     // no toolbar exists yet (out of scope until shadcn/ui components land),
-    // so tool switching and delete are keyboard-only for now: R = rectangle
-    // tool, Escape = back to select tool and deselect, Delete/Backspace =
-    // remove the selected shape
+    // so tool switching and delete are keyboard-only for now: R/C/A/L pick a
+    // shape tool, Escape goes back to select tool and deselects,
+    // Delete/Backspace removes the selected shape
     const handleKeyDown = (e: KeyboardEvent) => {
       const { selectedId, removeShape, setTool, selectShape } =
         useCanvasStore.getState();
@@ -67,10 +78,48 @@ export const useCanvasInteraction = (
         if (selectedId) removeShape(selectedId);
       } else if (e.key === "r" || e.key === "R") {
         setTool("rectangle");
+      } else if (e.key === "c" || e.key === "C") {
+        setTool("circle");
+      } else if (e.key === "a" || e.key === "A") {
+        setTool("arrow");
+      } else if (e.key === "l" || e.key === "L") {
+        setTool("label");
       } else if (e.key === "Escape") {
         setTool("select");
         selectShape(null);
       }
+    };
+
+    // labels are placed with a single click (no drag-to-size, since their
+    // size comes from measuring the text) and their text comes from a native
+    // prompt() — the only zero-dependency text entry available without a
+    // real UI component library
+    const createLabelAt = (point: Point) => {
+      const { addShape, selectShape, setTool } = useCanvasStore.getState();
+      const text = window.prompt("Label text:");
+      setTool("select");
+      if (!text) return;
+
+      const ctx = canvas.getContext("2d");
+      ctx?.save();
+      if (ctx) ctx.font = `${DEFAULT_FONT_SIZE}px system-ui, sans-serif`;
+      const width =
+        (ctx?.measureText(text).width ?? text.length * 8) + LABEL_PADDING * 2;
+      ctx?.restore();
+
+      const shape: NewShape = {
+        id: crypto.randomUUID(),
+        type: "label",
+        x: point.x,
+        y: point.y,
+        width,
+        height: DEFAULT_FONT_SIZE * 1.4,
+        text,
+        fontSize: DEFAULT_FONT_SIZE,
+        color: DEFAULT_SHAPE_COLOR,
+      };
+      addShape(shape);
+      selectShape(shape.id);
     };
 
     const handlePointerDown = (e: PointerEvent) => {
@@ -93,26 +142,89 @@ export const useCanvasInteraction = (
         addShape(shape);
         selectShape(shape.id);
         dragRef.current = {
-          mode: "creating",
+          mode: "creating-box",
           id: shape.id,
           start: canvasPoint,
         };
         return;
       }
 
-      // only rectangles resize from a single corner handle for now — circle/
-      // arrow/label get their own resize handling once they're creatable
-      const selectedShape = selectedId ? shapes[selectedId] : undefined;
-      if (
-        selectedShape?.type === "rectangle" &&
-        isPointInResizeHandle(canvasPoint, selectedShape)
-      ) {
-        dragRef.current = {
-          mode: "resizing",
-          id: selectedShape.id,
-          origin: { x: selectedShape.x, y: selectedShape.y },
+      if (tool === "circle") {
+        const shape: NewShape = {
+          id: crypto.randomUUID(),
+          type: "circle",
+          x: canvasPoint.x,
+          y: canvasPoint.y,
+          radius: 0,
+          color: DEFAULT_SHAPE_COLOR,
         };
+        addShape(shape);
+        selectShape(shape.id);
+        dragRef.current = { mode: "creating-circle", id: shape.id };
         return;
+      }
+
+      if (tool === "arrow") {
+        const shape: NewShape = {
+          id: crypto.randomUUID(),
+          type: "arrow",
+          x1: canvasPoint.x,
+          y1: canvasPoint.y,
+          x2: canvasPoint.x,
+          y2: canvasPoint.y,
+          color: DEFAULT_ARROW_COLOR,
+        };
+        addShape(shape);
+        selectShape(shape.id);
+        dragRef.current = { mode: "creating-arrow", id: shape.id };
+        return;
+      }
+
+      if (tool === "label") {
+        createLabelAt(canvasPoint);
+        return;
+      }
+
+      // select tool: resize handle (type-specific) > move > pan
+      const selectedShape = selectedId ? shapes[selectedId] : undefined;
+      if (selectedShape) {
+        if (
+          (selectedShape.type === "rectangle" ||
+            selectedShape.type === "label") &&
+          isPointInResizeHandle(canvasPoint, selectedShape)
+        ) {
+          dragRef.current = {
+            mode: "resizing-box",
+            id: selectedShape.id,
+            origin: { x: selectedShape.x, y: selectedShape.y },
+          };
+          return;
+        }
+        if (
+          selectedShape.type === "circle" &&
+          isPointInResizeHandle(canvasPoint, selectedShape)
+        ) {
+          dragRef.current = { mode: "resizing-circle", id: selectedShape.id };
+          return;
+        }
+        if (selectedShape.type === "arrow") {
+          if (isPointInArrowHandle(canvasPoint, selectedShape, "start")) {
+            dragRef.current = {
+              mode: "resizing-arrow",
+              id: selectedShape.id,
+              endpoint: "start",
+            };
+            return;
+          }
+          if (isPointInArrowHandle(canvasPoint, selectedShape, "end")) {
+            dragRef.current = {
+              mode: "resizing-arrow",
+              id: selectedShape.id,
+              endpoint: "end",
+            };
+            return;
+          }
+        }
       }
 
       const hit = findShapeAt(canvasPoint, shapes);
@@ -151,37 +263,67 @@ export const useCanvasInteraction = (
       }
 
       const canvasPoint = screenToCanvas(screenPoint, viewport);
+      const shape = shapes[drag.id];
+      if (!shape) return;
 
-      if (drag.mode === "creating") {
-        updateShape(drag.id, {
-          width: canvasPoint.x - drag.start.x,
-          height: canvasPoint.y - drag.start.y,
-        });
-      } else if (drag.mode === "moving") {
-        const shape = shapes[drag.id];
-        if (!shape) return;
-        const dx = canvasPoint.x - drag.lastCanvasPoint.x;
-        const dy = canvasPoint.y - drag.lastCanvasPoint.y;
-        updateShape(drag.id, translateShape(shape, dx, dy));
-        dragRef.current = { ...drag, lastCanvasPoint: canvasPoint };
-      } else if (drag.mode === "resizing") {
-        updateShape(drag.id, {
-          width: canvasPoint.x - drag.origin.x,
-          height: canvasPoint.y - drag.origin.y,
-        });
+      switch (drag.mode) {
+        case "creating-box":
+          updateShape(drag.id, {
+            width: canvasPoint.x - drag.start.x,
+            height: canvasPoint.y - drag.start.y,
+          });
+          break;
+        case "creating-circle":
+          if (shape.type === "circle") {
+            updateShape(drag.id, {
+              radius: distance({ x: shape.x, y: shape.y }, canvasPoint),
+            });
+          }
+          break;
+        case "creating-arrow":
+          updateShape(drag.id, { x2: canvasPoint.x, y2: canvasPoint.y });
+          break;
+        case "moving": {
+          const dx = canvasPoint.x - drag.lastCanvasPoint.x;
+          const dy = canvasPoint.y - drag.lastCanvasPoint.y;
+          updateShape(drag.id, translateShape(shape, dx, dy));
+          dragRef.current = { ...drag, lastCanvasPoint: canvasPoint };
+          break;
+        }
+        case "resizing-box":
+          updateShape(drag.id, {
+            width: canvasPoint.x - drag.origin.x,
+            height: canvasPoint.y - drag.origin.y,
+          });
+          break;
+        case "resizing-circle":
+          if (shape.type === "circle") {
+            updateShape(drag.id, {
+              radius: distance({ x: shape.x, y: shape.y }, canvasPoint),
+            });
+          }
+          break;
+        case "resizing-arrow":
+          updateShape(
+            drag.id,
+            drag.endpoint === "start"
+              ? { x1: canvasPoint.x, y1: canvasPoint.y }
+              : { x2: canvasPoint.x, y2: canvasPoint.y }
+          );
+          break;
       }
     };
 
     const handlePointerUp = () => {
       const drag = dragRef.current;
       dragRef.current = null;
-      if (!drag) return;
+      if (!drag || drag.mode === "panning") return;
 
       const { shapes, updateShape, removeShape, selectShape, setTool } =
         useCanvasStore.getState();
+      const shape = shapes[drag.id];
 
-      if (drag.mode === "creating" || drag.mode === "resizing") {
-        const shape = shapes[drag.id];
+      if (drag.mode === "creating-box" || drag.mode === "resizing-box") {
         if (!shape) return;
         const box = getBoundingBox(shape);
         // a click with no drag leaves a 0x0 rectangle — discard it instead
@@ -192,7 +334,28 @@ export const useCanvasInteraction = (
         } else {
           updateShape(drag.id, box);
         }
-        if (drag.mode === "creating") setTool("select");
+      } else if (drag.mode === "creating-circle") {
+        if (shape?.type === "circle" && shape.radius === 0) {
+          removeShape(drag.id);
+          selectShape(null);
+        }
+      } else if (drag.mode === "creating-arrow") {
+        if (
+          shape?.type === "arrow" &&
+          shape.x1 === shape.x2 &&
+          shape.y1 === shape.y2
+        ) {
+          removeShape(drag.id);
+          selectShape(null);
+        }
+      }
+
+      if (
+        drag.mode === "creating-box" ||
+        drag.mode === "creating-circle" ||
+        drag.mode === "creating-arrow"
+      ) {
+        setTool("select");
       }
     };
 
