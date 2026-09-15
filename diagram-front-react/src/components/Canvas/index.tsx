@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
 import { renderShape } from "@/components/ShapeRenderer";
 import { renderSelectionBox } from "@/components/SelectionBox";
+import { useCanvasInteraction } from "@/hooks/useCanvasInteraction";
 import { useCanvasStore } from "@/state";
 
 export const Canvas = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  useCanvasInteraction(canvasRef);
 
   useEffect(() => {
     const canvas = canvasRef.current;
