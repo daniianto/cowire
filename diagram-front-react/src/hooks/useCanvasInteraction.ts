@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import {
+  boxFromPoints,
   doBoxesIntersect,
   getBoundingBox,
   isPointInArrowHandle,
@@ -22,7 +23,7 @@ const MAX_ZOOM = 8;
 
 type DragState =
   | { mode: "creating-box"; id: string; start: Point } // rectangle
-  | { mode: "creating-circle"; id: string }
+  | { mode: "creating-circle"; id: string; start: Point }
   | { mode: "creating-arrow"; id: string }
   // `committed` is lazy history-commit tracking: a gesture that never
   // actually moves the pointer shouldn't push a wasted undo step
@@ -32,7 +33,15 @@ type DragState =
       lastCanvasPoint: Point;
       committed: boolean;
     }
-  | { mode: "resizing-box"; id: string; origin: Point; committed: boolean } // rectangle/label
+  | { mode: "resizing-box"; id: string; origin: Point; committed: boolean } // rectangle
+  | {
+      mode: "resizing-label";
+      id: string;
+      origin: Point;
+      initialHeight: number;
+      initialFontSize: number;
+      committed: boolean;
+    }
   | { mode: "resizing-circle"; id: string; committed: boolean }
   | {
       mode: "resizing-arrow";
@@ -243,7 +252,11 @@ export const useCanvasInteraction = (
         commitHistory();
         addShape(shape);
         selectShape(shape.id);
-        dragRef.current = { mode: "creating-circle", id: shape.id };
+        dragRef.current = {
+          mode: "creating-circle",
+          id: shape.id,
+          start: canvasPoint,
+        };
         return;
       }
 
@@ -274,14 +287,27 @@ export const useCanvasInteraction = (
         selectedIds.length === 1 ? shapes[selectedIds[0]] : undefined;
       if (singleSelected) {
         if (
-          (singleSelected.type === "rectangle" ||
-            singleSelected.type === "label") &&
+          singleSelected.type === "rectangle" &&
           isPointInResizeHandle(canvasPoint, singleSelected)
         ) {
           dragRef.current = {
             mode: "resizing-box",
             id: singleSelected.id,
             origin: { x: singleSelected.x, y: singleSelected.y },
+            committed: false,
+          };
+          return;
+        }
+        if (
+          singleSelected.type === "label" &&
+          isPointInResizeHandle(canvasPoint, singleSelected)
+        ) {
+          dragRef.current = {
+            mode: "resizing-label",
+            id: singleSelected.id,
+            origin: { x: singleSelected.x, y: singleSelected.y },
+            initialHeight: singleSelected.height,
+            initialFontSize: singleSelected.fontSize,
             committed: false,
           };
           return;
@@ -414,13 +440,18 @@ export const useCanvasInteraction = (
             height: canvasPoint.y - drag.start.y,
           });
           break;
-        case "creating-circle":
-          if (shape.type === "circle") {
-            updateShape(drag.id, {
-              radius: distance({ x: shape.x, y: shape.y }, canvasPoint),
-            });
-          }
+        case "creating-circle": {
+          // forms from an edge point, like a rectangle's corner — the drag
+          // defines a bounding box and the circle inscribes it, rather than
+          // growing outward from a fixed center
+          const box = boxFromPoints(drag.start, canvasPoint);
+          updateShape(drag.id, {
+            x: box.x + box.width / 2,
+            y: box.y + box.height / 2,
+            radius: Math.min(box.width, box.height) / 2,
+          });
           break;
+        }
         case "creating-arrow":
           updateShape(drag.id, { x2: canvasPoint.x, y2: canvasPoint.y });
           break;
@@ -432,6 +463,30 @@ export const useCanvasInteraction = (
           });
           dragRef.current = { ...drag, committed: true };
           break;
+        case "resizing-label": {
+          if (shape.type !== "label") break;
+          if (!drag.committed) commitHistory();
+
+          // scale font size by how much the box's height changed, then
+          // re-measure the actual text at that size so width follows the
+          // text rather than being independently draggable
+          const newHeight = canvasPoint.y - drag.origin.y;
+          const scale = Math.max(0.1, Math.abs(newHeight) / drag.initialHeight);
+          const fontSize = Math.max(4, drag.initialFontSize * scale);
+
+          const ctx = canvas.getContext("2d");
+          let width = shape.width;
+          if (ctx) {
+            ctx.save();
+            ctx.font = `${fontSize}px system-ui, sans-serif`;
+            width = ctx.measureText(shape.text).width + LABEL_PADDING * 2;
+            ctx.restore();
+          }
+
+          updateShape(drag.id, { height: newHeight, width, fontSize });
+          dragRef.current = { ...drag, committed: true };
+          break;
+        }
         case "resizing-circle":
           if (shape.type === "circle") {
             if (!drag.committed) commitHistory();
@@ -482,7 +537,11 @@ export const useCanvasInteraction = (
 
       const shape = shapes[drag.id];
 
-      if (drag.mode === "creating-box" || drag.mode === "resizing-box") {
+      if (
+        drag.mode === "creating-box" ||
+        drag.mode === "resizing-box" ||
+        drag.mode === "resizing-label"
+      ) {
         if (!shape) return;
         const box = getBoundingBox(shape);
         // a click with no drag leaves a 0x0 rectangle — discard it instead

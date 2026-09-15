@@ -3,6 +3,7 @@ import {
   getBoundingBox,
   getGroupBoundingBox,
   doBoxesIntersect,
+  boxFromPoints,
   isPointInShape,
   isPointInResizeHandle,
   isPointInArrowHandle,
@@ -168,6 +169,24 @@ describe("doBoxesIntersect", () => {
     expect(doBoxesIntersect(box, { x: 30, y: 10, width: 10, height: 10 })).toBe(
       false
     );
+  });
+});
+
+describe("boxFromPoints", () => {
+  it("normalizes a box regardless of drag direction", () => {
+    expect(boxFromPoints({ x: 10, y: 10 }, { x: 30, y: 40 })).toEqual({
+      x: 10,
+      y: 10,
+      width: 20,
+      height: 30,
+    });
+    // dragged from bottom-right back to top-left — same resulting box
+    expect(boxFromPoints({ x: 30, y: 40 }, { x: 10, y: 10 })).toEqual({
+      x: 10,
+      y: 10,
+      width: 20,
+      height: 30,
+    });
   });
 });
 
