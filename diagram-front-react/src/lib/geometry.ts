@@ -38,16 +38,34 @@ export const getBoundingBox = (shape: Shape): BoundingBox => {
   return { x, y, width: Math.abs(shape.width), height: Math.abs(shape.height) };
 };
 
+const isPointInBox = (point: Point, box: BoundingBox): boolean =>
+  point.x >= box.x &&
+  point.x <= box.x + box.width &&
+  point.y >= box.y &&
+  point.y <= box.y + box.height;
+
 /** Hit-tests a point (in canvas space) against a shape's bounding box. */
-export const isPointInShape = (point: Point, shape: Shape): boolean => {
+export const isPointInShape = (point: Point, shape: Shape): boolean =>
+  isPointInBox(point, getBoundingBox(shape));
+
+// size (in canvas units) of the resize handle drawn at a shape's bottom-right corner
+export const RESIZE_HANDLE_SIZE = 10;
+
+/** Bounding box of the resize handle at a shape's bottom-right corner. */
+export const getResizeHandleBounds = (shape: Shape): BoundingBox => {
   const box = getBoundingBox(shape);
-  return (
-    point.x >= box.x &&
-    point.x <= box.x + box.width &&
-    point.y >= box.y &&
-    point.y <= box.y + box.height
-  );
+  const half = RESIZE_HANDLE_SIZE / 2;
+  return {
+    x: box.x + box.width - half,
+    y: box.y + box.height - half,
+    width: RESIZE_HANDLE_SIZE,
+    height: RESIZE_HANDLE_SIZE,
+  };
 };
+
+/** Hit-tests a point against a shape's resize handle. */
+export const isPointInResizeHandle = (point: Point, shape: Shape): boolean =>
+  isPointInBox(point, getResizeHandleBounds(shape));
 
 /** Converts a point in screen space (e.g. pointer event coords) to canvas space. */
 export const screenToCanvas = (point: Point, viewport: Viewport): Point => ({

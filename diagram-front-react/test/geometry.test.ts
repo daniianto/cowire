@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getBoundingBox,
   isPointInShape,
+  isPointInResizeHandle,
   screenToCanvas,
   canvasToScreen,
   type Shape,
@@ -71,6 +72,17 @@ describe("isPointInShape", () => {
   it("hit-tests correctly against a shape with negative width/height", () => {
     const negative = rect({ x: 30, y: 30, width: -20, height: -20 });
     expect(isPointInShape({ x: 15, y: 15 }, negative)).toBe(true);
+  });
+});
+
+describe("isPointInResizeHandle", () => {
+  it("returns true for a point on the bottom-right handle", () => {
+    // rect() spans (10,10) to (30,30), so its handle is centered on (30,30)
+    expect(isPointInResizeHandle({ x: 30, y: 30 }, rect())).toBe(true);
+  });
+
+  it("returns false for a point away from the handle", () => {
+    expect(isPointInResizeHandle({ x: 15, y: 15 }, rect())).toBe(false);
   });
 });
 
