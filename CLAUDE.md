@@ -7,6 +7,8 @@ Cross-stage rules that apply regardless of which `STAGE_N.md` is active. Stage d
 - Root `package.json` scripts delegate into workspaces: `build:<pkg>`, `dev:<pkg>`
 
 ## Structure (type-oriented)
+Barrel/zustand chosen deliberately: a canvas app needs shared global state across many components, so a flat-file/no-global-store alternative wasn't a fit.
+
 Within a frontend package, organize by role, not by feature:
 ```
 src/
@@ -22,8 +24,12 @@ src/
 
 ## UI
 - shadcn/ui for component primitives — generated components live in `components/ui/` and are treated as owned code (editable), not a vendored dependency
+- Tailwind v4, CSS-first: no `tailwind.config.js` — `@import "tailwindcss"` + `@theme inline` design tokens live in the root stylesheet; dark mode via a `.dark` class toggle + `@custom-variant dark (&:is(.dark *))`
 - `lib/utils.ts` exports a `cn()` helper (clsx + tailwind-merge) for conditional/merged class names
-- Tailwind for styling
+- `class-variance-authority` (cva) for component style variants, used alongside `cn()`
+- `lucide-react` for icons
+- `sonner` for toast notifications — but toasts are only for async/background events (a save completed, a realtime disconnect/reconnect). Errors/warnings tied directly to a user action (form validation, a rejected input) render as inline blocks (e.g. shadcn `alert`), never as a toast
+- UI must be responsive/adaptive across viewport sizes — verify new screens/components at common breakpoints (mobile/tablet/desktop), not just at desktop width
 
 ## Code style
 - Prettier: double quotes, semicolons, 2-space indent, printWidth 80, trailingComma "es5", arrowParens "always", LF
@@ -40,10 +46,15 @@ This codebase's actual style is comment-friendly, not comment-averse:
 
 ## Supabase (relevant once persistence lands, Stage 3+)
 - `supabase` is its own unprefixed workspace package: `config.toml`, `migrations/`, and generated `database.types.ts` live there — separate from `<project>-supabase-wrapper`, the hand-written TS abstraction layer over the client
-- Migrations are hand-authored first, not pulled: run `migration:` (`supabase migration new <name>`, named for what it does) to create the file, write the SQL, then `db:push` to apply it. This keeps schema changes reviewable in a PR and reproducible across environments — important since this project is co-op/multi-collaborator, unlike the solo prior projects this convention set was drawn from
+- Migrations are hand-authored first, not pulled: run `migration:` (`supabase migration new <name>`, named for what it does) to create the file, write the SQL, then `db:push` to apply it. This keeps schema changes reviewable in a PR and reproducible across environments — important since this project is co-op/multi-collaborator
 - `db:pull` is a fallback for reconciliation only (e.g. someone made an out-of-band change in the Studio dashboard) — not the everyday workflow; a pulled migration should be renamed from the auto-generated `..._remote_schema.sql` to describe what it does
 - `database.types.ts` is always generated via `gen:types`, never hand-edited — regenerate after every schema change and commit the result so the wrapper package gets compile-time schema safety
 - Root scripts (all `cd supabase && supabase ...`): `db:pull`, `db:push`, `migration`, `gen:types`
+
+## Environment & secrets (relevant once Supabase lands, Stage 3+)
+- Config values (Supabase URL/anon key, etc.) come from `.env` files, never hardcoded
+- Each package that needs env vars ships a committed `.env.example` with placeholder values; the real `.env` is gitignored
+- Vite env vars are prefixed `VITE_` to be exposed to client code
 
 ## Performance
 This app leans on co-op (multi-user, concurrent) editing, so rendering and merge logic need to stay fast as shape count and collaborator count grow — see `ROADMAP.md` for why stages are ordered the way they are.
@@ -55,6 +66,7 @@ This app leans on co-op (multi-user, concurrent) editing, so rendering and merge
 ## Testing
 - Vitest, not colocated — tests live in a top-level `test/` directory per package (e.g. `<package>/test/geometry.test.ts`)
 - `describe` / `it` / `expect` from `vitest`; a `vitest.config.ts` per package with `include: ["test/**/*.test.ts"]`
+- Stages 4-6 (realtime, CRDT, persistence-sync) need integration tests that simulate concurrent clients (e.g. two Yjs docs merging, two Broadcast clients racing to edit the same shape) — unit tests alone won't catch merge/ordering bugs
 
 ## Git
 - Husky `pre-commit`: `lint` → `format` → relevant `test` script → `git add -u`

@@ -12,6 +12,7 @@ Rendering + interaction fundamentals working before any data model complexity.
 - One shape type: rectangle
 - Create / select / move / resize / delete
 - Local React state only — no persistence, no backend
+- GitHub Actions CI: lint + format check + test on every push (no deploy workflow yet — see `ROADMAP.md`)
 
 ### Structure
 

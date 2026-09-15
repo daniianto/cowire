@@ -11,4 +11,6 @@ Performance is a first-class goal: co-op editing must stay fast as shape count a
 7. **Polish** — reconnect handling, group-delete edge cases, presence UI
 8. **Documentation** — README with trade-offs, Table of Contents, Known Issues, Design Decisions
 
+**CI/Deploy**: GitHub Actions runs lint/format/test on every push, starting Stage 1 — not gated behind a later stage. Hosting target is GitHub Pages (static frontend, Supabase as the external backend); the deploy workflow itself is added once Stage 3 (persistence) makes the app worth shipping.
+
 Stage detail docs: `STAGE_1.md`, `STAGE_2.md`, ...
