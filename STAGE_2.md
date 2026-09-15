@@ -10,11 +10,13 @@ Round out the local editing toolset — more shape types, multi-select, grouping
 ### Scope
 
 - Shape types: circle, arrow, label (rectangle already exists from Stage 1)
-- Multi-select (shift-click to add/remove from selection; marquee/rubber-band select by dragging empty canvas)
+- Multi-select (shift-click to add/remove from selection; marquee/rubber-band select — but see gesture note below)
 - Group / ungroup selected shapes; moving or selecting one member acts on the whole group
 - Explicit z-order: bring-to-front / send-to-back on the selected shape(s) or group
 - Undo/redo (local-only — see `CLAUDE.md` Performance section for why this is expected to need rework once Stage 5's CRDT lands)
 - Keyboard-hint text updated to cover new shortcuts (no toolbar still — same reasoning as Stage 1)
+
+**Gesture conflict, resolved during implementation:** Stage 1 already uses plain drag on empty canvas for panning. Marquee-select on the same gesture would collide with it, so: **plain drag = pan (unchanged)**, **Shift+drag = marquee select**, reusing Shift as the same "additive" modifier it already is for click. This wasn't decided in this doc originally — it fell out of actually building the feature.
 
 ### Data model changes
 
@@ -55,6 +57,8 @@ type LabelShape = BaseShape & {
   type: "label";
   x: number;
   y: number;
+  width: number; // measured from text at creation time, not derived on the fly
+  height: number;
   text: string;
   fontSize: number;
 };
@@ -66,8 +70,8 @@ Store changes in `canvasStore.ts`:
 
 - `selectedId: string | null` → `selectedIds: string[]` (multi-select)
 - add grouping actions: `groupSelected()`, `ungroupSelected()`
-- add z-order actions: `bringToFront(id)`, `sendToBack(id)` (reassign `zIndex`)
-- add `undo()` / `redo()` with `past`/`future` snapshot stacks of `{ shapes, selectedIds }` — simplest correct approach for local-only history; not designed to survive CRDT integration
+- add z-order actions: `bringSelectedToFront()`, `sendSelectedToBack()` — act on the current selection rather than taking an id, so they compose with multi-select/groups for free
+- add `commitHistory()` / `undo()` / `redo()` with `past`/`future` stacks of `{ shapes }` snapshots (selection isn't snapshotted — only content edits are undoable). `commitHistory()` must be called explicitly at gesture boundaries (before a create/move/resize drag starts, before a one-shot group/delete/reorder), never on every intermediate update, or undo would revert one animation frame at a time instead of one whole action. Not designed to survive CRDT integration
 
 ### Structure (changed/new files, on top of Stage 1's tree)
 
