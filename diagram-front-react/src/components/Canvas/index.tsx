@@ -40,7 +40,10 @@ export const Canvas = () => {
       ctx.translate(viewport.offsetX, viewport.offsetY);
       ctx.scale(viewport.zoom, viewport.zoom);
 
-      for (const shape of Object.values(shapes)) {
+      const inZOrder = Object.values(shapes).sort(
+        (a, b) => a.zIndex - b.zIndex
+      );
+      for (const shape of inZOrder) {
         renderShape(ctx, shape);
       }
       const selected = selectedId ? shapes[selectedId] : undefined;

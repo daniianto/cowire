@@ -22,17 +22,13 @@ type DragState =
   | { mode: "panning"; lastScreenPoint: Point }
   | null;
 
-// topmost shape under a point — later entries were added more recently and
-// are drawn on top, so search from the end
+// topmost shape under a point, matching Canvas's zIndex draw order
 const findShapeAt = (
   point: Point,
   shapes: Record<string, Shape>
 ): Shape | undefined => {
-  const values = Object.values(shapes);
-  for (let i = values.length - 1; i >= 0; i--) {
-    if (isPointInShape(point, values[i])) return values[i];
-  }
-  return undefined;
+  const inZOrder = Object.values(shapes).sort((a, b) => b.zIndex - a.zIndex);
+  return inZOrder.find((shape) => isPointInShape(point, shape));
 };
 
 const toScreenPoint = (
