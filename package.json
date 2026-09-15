@@ -1,0 +1,28 @@
+{
+  "name": "cowire",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Diagram Builder — collaborative diagram editor (Yjs/CRDT + Supabase)",
+  "workspaces": [
+    "diagram-front-react"
+  ],
+  "scripts": {
+    "dev:front-react": "npm run dev --workspace=diagram-front-react",
+    "build:front-react": "npm run build --workspace=diagram-front-react",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm test --workspace=diagram-front-react",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "husky": "^9.1.7",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "^8.70.0"
+  }
+}

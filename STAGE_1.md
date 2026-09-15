@@ -1,12 +1,14 @@
 # Stage 1 — Static Canvas, Local State
 
-Roadmap item 1: *"Static canvas, local state — render loop, pan/zoom, rectangle only, no persistence."*
+Roadmap item 1: _"Static canvas, local state — render loop, pan/zoom, rectangle only, no persistence."_
 Structure and style follow `CLAUDE.md`.
 
 ### Goal
+
 Rendering + interaction fundamentals working before any data model complexity.
 
 ### Scope
+
 - Canvas render loop
 - Pan/zoom
 - One shape type: rectangle
@@ -54,7 +56,9 @@ type Shape = {
 ```
 
 ### Tests
+
 - `geometry.test.ts` — hit-testing (point-in-shape), bounding box math, pan/zoom coordinate transform
 
 ### Out of scope
+
 Other shape types, groups, persistence, multiplayer, undo/redo, shadcn/ui components (no forms/dialogs needed yet), touch/mobile canvas input (mouse/pointer only for now — touch support is a Stage 7 Polish item).
