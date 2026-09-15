@@ -38,6 +38,13 @@ This codebase's actual style is comment-friendly, not comment-averse:
 - JSDoc-style block comments (`/** ... */`) above exported functions/hooks that do non-obvious work, describing what it does and (when relevant) params
 - Keep following this style even though it's more verbose than the general default
 
+## Performance
+This app leans on co-op (multi-user, concurrent) editing, so rendering and merge logic need to stay fast as shape count and collaborator count grow — see `ROADMAP.md` for why stages are ordered the way they are.
+- Avoid unnecessary re-renders: keep zustand selectors narrow (subscribe to the slice you need, not the whole store), memoize expensive derived values
+- Hit-testing, bounding-box math, and any per-frame canvas work should stay correct-but-cheap at small shape counts now; revisit algorithmic complexity (spatial indexing, dirty-region redraw) before it becomes the bottleneck, not preemptively
+- Collaborative updates (Broadcast in Stage 4, Yjs in Stage 5+) should batch/debounce rather than send one message per pointer-move or keystroke
+- Profile before optimizing — don't hand-tune based on guesses; when a stage doc calls out a specific perf target or measurement, treat it as a checkpoint to hit before moving to the next stage
+
 ## Testing
 - Vitest, not colocated — tests live in a top-level `test/` directory per package (e.g. `<package>/test/geometry.test.ts`)
 - `describe` / `it` / `expect` from `vitest`; a `vitest.config.ts` per package with `include: ["test/**/*.test.ts"]`

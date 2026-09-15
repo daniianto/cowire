@@ -1,5 +1,7 @@
 # Diagram Builder — Roadmap
 
+Performance is a first-class goal: co-op editing must stay fast as shape count and collaborator count grow — hence naive-realtime (4) before CRDT (5) before persistence-sync (6). See `CLAUDE.md`'s Performance section.
+
 1. **Static canvas, local state** — render loop, pan/zoom, rectangle only, no persistence
 2. **Full shape set + grouping (local)** — circle/arrow/label, multi-select, group/ungroup, z-order, undo/redo
 3. **Persistence (single-user)** — auth, Postgres schema + RLS, save/load
