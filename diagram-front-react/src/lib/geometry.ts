@@ -84,10 +84,6 @@ const normalizeBox = (
   height: Math.abs(height),
 });
 
-/** Normalized bounding box spanning two arbitrary points (e.g. a drag start/end). */
-export const boxFromPoints = (a: Point, b: Point): BoundingBox =>
-  normalizeBox(a.x, a.y, b.x - a.x, b.y - a.y);
-
 /**
  * Normalizes a shape's geometry into a bounding box with non-negative
  * width/height. Needed because dragging to create/resize a shape can leave

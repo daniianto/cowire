@@ -1,6 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
 import {
-  boxFromPoints,
   doBoxesIntersect,
   getBoundingBox,
   isPointInArrowHandle,
@@ -441,14 +440,22 @@ export const useCanvasInteraction = (
           });
           break;
         case "creating-circle": {
-          // forms from an edge point, like a rectangle's corner — the drag
-          // defines a bounding box and the circle inscribes it, rather than
-          // growing outward from a fixed center
-          const box = boxFromPoints(drag.start, canvasPoint);
+          // anchored exactly like a rectangle's corner: `start` stays fixed
+          // as one corner of a square bounding box that grows toward the
+          // pointer. Sizing the square from max(|dx|,|dy|) — rather than
+          // the direct start-to-pointer distance — is what keeps that
+          // corner from drifting as the drag direction wobbles off-axis;
+          // using the raw distance instead makes the diameter (and thus
+          // the edge nearest `start`) grow with any vertical component too.
+          const dx = canvasPoint.x - drag.start.x;
+          const dy = canvasPoint.y - drag.start.y;
+          const side = Math.max(Math.abs(dx), Math.abs(dy));
+          const boxX = dx >= 0 ? drag.start.x : drag.start.x - side;
+          const boxY = dy >= 0 ? drag.start.y : drag.start.y - side;
           updateShape(drag.id, {
-            x: box.x + box.width / 2,
-            y: box.y + box.height / 2,
-            radius: Math.min(box.width, box.height) / 2,
+            x: boxX + side / 2,
+            y: boxY + side / 2,
+            radius: side / 2,
           });
           break;
         }
