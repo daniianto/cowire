@@ -4,6 +4,8 @@ import {
   isPointInResizeHandle,
   isPointInShape,
   screenToCanvas,
+  translateShape,
+  type NewShape,
   type Point,
   type Shape,
 } from "@/lib/geometry";
@@ -15,7 +17,7 @@ const MAX_ZOOM = 8;
 
 type DragState =
   | { mode: "creating"; id: string; start: Point }
-  | { mode: "moving"; id: string; pointerOffset: Point }
+  | { mode: "moving"; id: string; lastCanvasPoint: Point }
   | { mode: "resizing"; id: string; origin: Point }
   | { mode: "panning"; lastScreenPoint: Point }
   | null;
@@ -83,7 +85,7 @@ export const useCanvasInteraction = (
       const canvasPoint = screenToCanvas(screenPoint, viewport);
 
       if (tool === "rectangle") {
-        const shape: Shape = {
+        const shape: NewShape = {
           id: crypto.randomUUID(),
           type: "rectangle",
           x: canvasPoint.x,
@@ -102,8 +104,13 @@ export const useCanvasInteraction = (
         return;
       }
 
+      // only rectangles resize from a single corner handle for now — circle/
+      // arrow/label get their own resize handling once they're creatable
       const selectedShape = selectedId ? shapes[selectedId] : undefined;
-      if (selectedShape && isPointInResizeHandle(canvasPoint, selectedShape)) {
+      if (
+        selectedShape?.type === "rectangle" &&
+        isPointInResizeHandle(canvasPoint, selectedShape)
+      ) {
         dragRef.current = {
           mode: "resizing",
           id: selectedShape.id,
@@ -118,10 +125,7 @@ export const useCanvasInteraction = (
         dragRef.current = {
           mode: "moving",
           id: hit.id,
-          pointerOffset: {
-            x: canvasPoint.x - hit.x,
-            y: canvasPoint.y - hit.y,
-          },
+          lastCanvasPoint: canvasPoint,
         };
         return;
       }
@@ -134,7 +138,8 @@ export const useCanvasInteraction = (
       const drag = dragRef.current;
       if (!drag) return;
 
-      const { viewport, updateShape, setViewport } = useCanvasStore.getState();
+      const { shapes, viewport, updateShape, setViewport } =
+        useCanvasStore.getState();
       const screenPoint = toScreenPoint(e, canvas);
 
       if (drag.mode === "panning") {
@@ -157,10 +162,12 @@ export const useCanvasInteraction = (
           height: canvasPoint.y - drag.start.y,
         });
       } else if (drag.mode === "moving") {
-        updateShape(drag.id, {
-          x: canvasPoint.x - drag.pointerOffset.x,
-          y: canvasPoint.y - drag.pointerOffset.y,
-        });
+        const shape = shapes[drag.id];
+        if (!shape) return;
+        const dx = canvasPoint.x - drag.lastCanvasPoint.x;
+        const dy = canvasPoint.y - drag.lastCanvasPoint.y;
+        updateShape(drag.id, translateShape(shape, dx, dy));
+        dragRef.current = { ...drag, lastCanvasPoint: canvasPoint };
       } else if (drag.mode === "resizing") {
         updateShape(drag.id, {
           width: canvasPoint.x - drag.origin.x,

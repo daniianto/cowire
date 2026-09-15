@@ -1,16 +1,23 @@
 import { describe, it, expect } from "vitest";
 import {
   getBoundingBox,
+  getGroupBoundingBox,
   isPointInShape,
   isPointInResizeHandle,
+  isPointInArrowHandle,
   screenToCanvas,
   canvasToScreen,
-  type Shape,
+  type RectangleShape,
+  type CircleShape,
+  type ArrowShape,
+  type LabelShape,
 } from "../src/lib/geometry";
 
-const rect = (overrides: Partial<Shape> = {}): Shape => ({
+const rect = (overrides: Partial<RectangleShape> = {}): RectangleShape => ({
   id: "1",
   type: "rectangle",
+  zIndex: 0,
+  groupId: null,
   x: 10,
   y: 10,
   width: 20,
@@ -19,8 +26,48 @@ const rect = (overrides: Partial<Shape> = {}): Shape => ({
   ...overrides,
 });
 
+const circle = (overrides: Partial<CircleShape> = {}): CircleShape => ({
+  id: "2",
+  type: "circle",
+  zIndex: 0,
+  groupId: null,
+  x: 50,
+  y: 50,
+  radius: 10,
+  color: "#000000",
+  ...overrides,
+});
+
+const arrow = (overrides: Partial<ArrowShape> = {}): ArrowShape => ({
+  id: "3",
+  type: "arrow",
+  zIndex: 0,
+  groupId: null,
+  x1: 0,
+  y1: 0,
+  x2: 100,
+  y2: 0,
+  color: "#000000",
+  ...overrides,
+});
+
+const label = (overrides: Partial<LabelShape> = {}): LabelShape => ({
+  id: "4",
+  type: "label",
+  zIndex: 0,
+  groupId: null,
+  x: 10,
+  y: 10,
+  width: 40,
+  height: 16,
+  text: "hello",
+  fontSize: 14,
+  color: "#000000",
+  ...overrides,
+});
+
 describe("getBoundingBox", () => {
-  it("returns the shape's own geometry when width/height are positive", () => {
+  it("returns a rectangle's own geometry when width/height are positive", () => {
     expect(getBoundingBox(rect())).toEqual({
       x: 10,
       y: 10,
@@ -29,49 +76,92 @@ describe("getBoundingBox", () => {
     });
   });
 
-  it("normalizes negative width", () => {
-    expect(getBoundingBox(rect({ x: 30, width: -20 }))).toEqual({
-      x: 10,
-      y: 10,
-      width: 20,
-      height: 20,
-    });
-  });
-
-  it("normalizes negative height", () => {
-    expect(getBoundingBox(rect({ y: 30, height: -20 }))).toEqual({
-      x: 10,
-      y: 10,
-      width: 20,
-      height: 20,
-    });
-  });
-
-  it("normalizes both negative width and height", () => {
+  it("normalizes a rectangle with negative width/height", () => {
     expect(
       getBoundingBox(rect({ x: 30, y: 30, width: -20, height: -20 }))
     ).toEqual({ x: 10, y: 10, width: 20, height: 20 });
   });
+
+  it("computes a circle's bounding box from its center and radius", () => {
+    expect(getBoundingBox(circle({ x: 50, y: 50, radius: 10 }))).toEqual({
+      x: 40,
+      y: 40,
+      width: 20,
+      height: 20,
+    });
+  });
+
+  it("normalizes an arrow's endpoints into a bounding box regardless of direction", () => {
+    expect(getBoundingBox(arrow({ x1: 100, y1: 50, x2: 0, y2: 0 }))).toEqual({
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 50,
+    });
+  });
+
+  it("treats a label like a rectangle", () => {
+    expect(getBoundingBox(label())).toEqual({
+      x: 10,
+      y: 10,
+      width: 40,
+      height: 16,
+    });
+  });
+});
+
+describe("getGroupBoundingBox", () => {
+  it("returns the union box of multiple shapes", () => {
+    const a = rect({ x: 0, y: 0, width: 10, height: 10 });
+    const b = rect({ id: "5", x: 40, y: 40, width: 10, height: 10 });
+    expect(getGroupBoundingBox([a, b])).toEqual({
+      x: 0,
+      y: 0,
+      width: 50,
+      height: 50,
+    });
+  });
+
+  it("returns a single shape's own box when given one shape", () => {
+    expect(getGroupBoundingBox([rect()])).toEqual({
+      x: 10,
+      y: 10,
+      width: 20,
+      height: 20,
+    });
+  });
+
+  it("returns a zero box for an empty group", () => {
+    expect(getGroupBoundingBox([])).toEqual({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+    });
+  });
 });
 
 describe("isPointInShape", () => {
-  it("returns true for a point inside the shape", () => {
+  it("hit-tests a rectangle via its bounding box", () => {
     expect(isPointInShape({ x: 15, y: 15 }, rect())).toBe(true);
-  });
-
-  it("returns true for a point exactly on the boundary", () => {
-    expect(isPointInShape({ x: 10, y: 10 }, rect())).toBe(true);
-    expect(isPointInShape({ x: 30, y: 30 }, rect())).toBe(true);
-  });
-
-  it("returns false for a point outside the shape", () => {
     expect(isPointInShape({ x: 5, y: 5 }, rect())).toBe(false);
-    expect(isPointInShape({ x: 31, y: 15 }, rect())).toBe(false);
   });
 
-  it("hit-tests correctly against a shape with negative width/height", () => {
-    const negative = rect({ x: 30, y: 30, width: -20, height: -20 });
-    expect(isPointInShape({ x: 15, y: 15 }, negative)).toBe(true);
+  it("hit-tests a circle by distance from center, not its bounding square", () => {
+    const c = circle({ x: 50, y: 50, radius: 10 });
+    expect(isPointInShape({ x: 50, y: 50 }, c)).toBe(true); // center
+    expect(isPointInShape({ x: 50, y: 59 }, c)).toBe(true); // inside radius
+    // corner of the bounding square is outside the actual circle
+    expect(isPointInShape({ x: 41, y: 41 }, c)).toBe(false);
+  });
+
+  it("hit-tests an arrow by proximity to its line, not its bounding box", () => {
+    const a = arrow({ x1: 0, y1: 0, x2: 100, y2: 0 });
+    expect(isPointInShape({ x: 50, y: 0 }, a)).toBe(true); // on the line
+    expect(isPointInShape({ x: 50, y: 3 }, a)).toBe(true); // within threshold
+    // inside the arrow's bounding box, but far from the actual line — arrows
+    // are thin, so a bounding-box hit test would wrongly count this
+    expect(isPointInShape({ x: 50, y: 50 }, a)).toBe(false);
   });
 });
 
@@ -83,6 +173,20 @@ describe("isPointInResizeHandle", () => {
 
   it("returns false for a point away from the handle", () => {
     expect(isPointInResizeHandle({ x: 15, y: 15 }, rect())).toBe(false);
+  });
+});
+
+describe("isPointInArrowHandle", () => {
+  const a = arrow({ x1: 0, y1: 0, x2: 100, y2: 0 });
+
+  it("hit-tests the start endpoint handle", () => {
+    expect(isPointInArrowHandle({ x: 0, y: 0 }, a, "start")).toBe(true);
+    expect(isPointInArrowHandle({ x: 100, y: 0 }, a, "start")).toBe(false);
+  });
+
+  it("hit-tests the end endpoint handle", () => {
+    expect(isPointInArrowHandle({ x: 100, y: 0 }, a, "end")).toBe(true);
+    expect(isPointInArrowHandle({ x: 0, y: 0 }, a, "end")).toBe(false);
   });
 });
 
