@@ -4,7 +4,9 @@ import {
   createDiagramDoc,
   getAllShapes,
   removeShape,
+  replaceAllShapes,
   setShape,
+  updateManyShapeFields,
   updateShapeFields,
   type ShapeRecord,
 } from "../src/doc";
@@ -40,6 +42,27 @@ describe("setShape / getAllShapes", () => {
     setShape(doc, "r1", rect);
     removeShape(doc, "r1");
     expect(getAllShapes(doc)).toEqual({});
+  });
+
+  it("updates fields on several shapes in one transaction", () => {
+    const doc = createDiagramDoc();
+    setShape(doc, "r1", rect);
+    setShape(doc, "r2", { ...rect, id: "r2" });
+    updateManyShapeFields(doc, {
+      r1: { zIndex: 5 },
+      r2: { zIndex: 6 },
+    });
+    const shapes = getAllShapes(doc);
+    expect(shapes.r1.zIndex).toBe(5);
+    expect(shapes.r2.zIndex).toBe(6);
+  });
+
+  it("replaces every shape wholesale", () => {
+    const doc = createDiagramDoc();
+    setShape(doc, "stale", rect);
+    const r2 = { ...rect, id: "r2" };
+    replaceAllShapes(doc, { r2 });
+    expect(getAllShapes(doc)).toEqual({ r2 });
   });
 });
 

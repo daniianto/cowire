@@ -61,6 +61,39 @@ export const removeShape = (doc: Y.Doc, id: string, origin?: unknown): void => {
   }, origin);
 };
 
+/** Merges different field updates into several existing shapes as a single transaction (one undo step, one merged broadcast). */
+export const updateManyShapeFields = (
+  doc: Y.Doc,
+  updates: Record<string, ShapeRecord>,
+  origin?: unknown
+): void => {
+  doc.transact(() => {
+    const shapesMap = getShapesMap(doc);
+    for (const [id, fields] of Object.entries(updates)) {
+      const shapeMap = shapesMap.get(id);
+      if (!shapeMap) continue;
+      for (const [key, value] of Object.entries(fields)) {
+        shapeMap.set(key, value);
+      }
+    }
+  }, origin);
+};
+
+/** Wholesale-replaces every shape, e.g. when loading a saved diagram. */
+export const replaceAllShapes = <T extends ShapeRecord>(
+  doc: Y.Doc,
+  shapes: Record<string, T>,
+  origin?: unknown
+): void => {
+  doc.transact(() => {
+    const shapesMap = getShapesMap(doc);
+    shapesMap.clear();
+    for (const [id, shape] of Object.entries(shapes)) {
+      shapesMap.set(id, shapeToYMap(shape));
+    }
+  }, origin);
+};
+
 export const getAllShapes = <T extends ShapeRecord>(
   doc: Y.Doc
 ): Record<string, T> => {

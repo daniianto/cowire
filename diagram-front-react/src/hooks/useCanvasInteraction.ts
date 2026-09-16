@@ -82,10 +82,12 @@ const distance = (a: Point, b: Point): number =>
  * Shift+drag on empty canvas marquee-selects instead, reusing Shift as the
  * same "additive/multi" modifier it already is for click.
  *
- * Undo/redo note: history is committed at gesture boundaries (before a
+ * Undo/redo note: undo grouping is ended at gesture boundaries (before a
  * create/move/resize starts, or before a one-shot action like group/delete),
  * never on every intermediate update — otherwise undo would only revert one
- * animation frame of a drag instead of the whole gesture.
+ * animation frame of a drag instead of the whole gesture. Backed by
+ * canvasStore's Y.UndoManager (see state/canvasStore.ts), not a hand-rolled
+ * snapshot stack.
  *
  * Attaches its own native listeners — wheel needs `{ passive: false }` to
  * reliably preventDefault the page-zoom/scroll, which React's synthetic
@@ -116,7 +118,7 @@ export const useCanvasInteraction = (
         ungroupSelected,
         bringSelectedToFront,
         sendSelectedToBack,
-        commitHistory,
+        stopCapturing,
         undo,
         redo,
       } = useCanvasStore.getState();
@@ -128,7 +130,7 @@ export const useCanvasInteraction = (
         else undo();
       } else if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedIds.length > 0) {
-          commitHistory();
+          stopCapturing();
           for (const id of selectedIds) removeShape(id);
         }
       } else if (e.key === "r" || e.key === "R") {
@@ -146,21 +148,21 @@ export const useCanvasInteraction = (
               (id) => useCanvasStore.getState().shapes[id]?.groupId
             )
           ) {
-            commitHistory();
+            stopCapturing();
             ungroupSelected();
           }
         } else if (selectedIds.length >= 2) {
-          commitHistory();
+          stopCapturing();
           groupSelected();
         }
       } else if (e.key === "]") {
         if (selectedIds.length > 0) {
-          commitHistory();
+          stopCapturing();
           bringSelectedToFront();
         }
       } else if (e.key === "[") {
         if (selectedIds.length > 0) {
-          commitHistory();
+          stopCapturing();
           sendSelectedToBack();
         }
       } else if (e.key === "Escape") {
@@ -174,7 +176,7 @@ export const useCanvasInteraction = (
     // prompt() — the only zero-dependency text entry available without a
     // real UI component library
     const createLabelAt = (point: Point) => {
-      const { addShape, selectShape, setTool, commitHistory } =
+      const { addShape, selectShape, setTool, stopCapturing } =
         useCanvasStore.getState();
       const text = window.prompt("Label text:");
       setTool("select");
@@ -198,7 +200,7 @@ export const useCanvasInteraction = (
         fontSize: DEFAULT_FONT_SIZE,
         color: DEFAULT_SHAPE_COLOR,
       };
-      commitHistory();
+      stopCapturing();
       addShape(shape);
       selectShape(shape.id);
     };
@@ -213,7 +215,7 @@ export const useCanvasInteraction = (
         addShape,
         selectShape,
         toggleSelect,
-        commitHistory,
+        stopCapturing,
       } = useCanvasStore.getState();
       const screenPoint = toScreenPoint(e, canvas);
       const canvasPoint = screenToCanvas(screenPoint, viewport);
@@ -228,7 +230,7 @@ export const useCanvasInteraction = (
           height: 0,
           color: DEFAULT_SHAPE_COLOR,
         };
-        commitHistory();
+        stopCapturing();
         addShape(shape);
         selectShape(shape.id);
         dragRef.current = {
@@ -248,7 +250,7 @@ export const useCanvasInteraction = (
           radius: 0,
           color: DEFAULT_SHAPE_COLOR,
         };
-        commitHistory();
+        stopCapturing();
         addShape(shape);
         selectShape(shape.id);
         dragRef.current = {
@@ -269,7 +271,7 @@ export const useCanvasInteraction = (
           y2: canvasPoint.y,
           color: DEFAULT_ARROW_COLOR,
         };
-        commitHistory();
+        stopCapturing();
         addShape(shape);
         selectShape(shape.id);
         dragRef.current = { mode: "creating-arrow", id: shape.id };
@@ -385,7 +387,7 @@ export const useCanvasInteraction = (
         updateShape,
         setViewport,
         setMarqueeRect,
-        commitHistory,
+        stopCapturing,
       } = useCanvasStore.getState();
       const screenPoint = toScreenPoint(e, canvas);
 
@@ -414,7 +416,7 @@ export const useCanvasInteraction = (
       }
 
       if (drag.mode === "moving") {
-        if (!drag.committed) commitHistory();
+        if (!drag.committed) stopCapturing();
         const dx = canvasPoint.x - drag.lastCanvasPoint.x;
         const dy = canvasPoint.y - drag.lastCanvasPoint.y;
         for (const id of drag.ids) {
@@ -463,7 +465,7 @@ export const useCanvasInteraction = (
           updateShape(drag.id, { x2: canvasPoint.x, y2: canvasPoint.y });
           break;
         case "resizing-box":
-          if (!drag.committed) commitHistory();
+          if (!drag.committed) stopCapturing();
           updateShape(drag.id, {
             width: canvasPoint.x - drag.origin.x,
             height: canvasPoint.y - drag.origin.y,
@@ -472,7 +474,7 @@ export const useCanvasInteraction = (
           break;
         case "resizing-label": {
           if (shape.type !== "label") break;
-          if (!drag.committed) commitHistory();
+          if (!drag.committed) stopCapturing();
 
           // scale font size by how much the box's height changed, then
           // re-measure the actual text at that size so width follows the
@@ -496,7 +498,7 @@ export const useCanvasInteraction = (
         }
         case "resizing-circle":
           if (shape.type === "circle") {
-            if (!drag.committed) commitHistory();
+            if (!drag.committed) stopCapturing();
             updateShape(drag.id, {
               radius: distance({ x: shape.x, y: shape.y }, canvasPoint),
             });
@@ -504,7 +506,7 @@ export const useCanvasInteraction = (
           }
           break;
         case "resizing-arrow":
-          if (!drag.committed) commitHistory();
+          if (!drag.committed) stopCapturing();
           updateShape(
             drag.id,
             drag.endpoint === "start"
