@@ -12,11 +12,16 @@ export type DiagramRecord = DiagramSummary & {
 };
 
 export const listDiagrams = async (
-  client: DiagramSupabaseClient
+  client: DiagramSupabaseClient,
+  userId: string
 ): Promise<DiagramSummary[]> => {
+  // RLS permits any authenticated user to select any diagram (needed so a
+  // collaborator can open a shared link) - "my diagrams" is enforced here
+  // via an explicit filter, not by the database policy
   const { data, error } = await client
     .from("diagrams")
     .select("id, name, updated_at")
+    .eq("user_id", userId)
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return data.map((row) => ({

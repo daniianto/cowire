@@ -24,10 +24,10 @@ type SerializedDiagram = {
 export const useDiagrams = () => {
   const { client, session } = useSupabase();
 
-  const list = useCallback(
-    (): Promise<DiagramSummary[]> => listDiagrams(client),
-    [client]
-  );
+  const list = useCallback((): Promise<DiagramSummary[]> => {
+    if (!session) return Promise.resolve([]);
+    return listDiagrams(client, session.user.id);
+  }, [client, session]);
 
   const save = useCallback(
     async (name: string): Promise<DiagramSummary | undefined> => {
