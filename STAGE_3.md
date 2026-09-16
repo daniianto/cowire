@@ -15,13 +15,14 @@ Give each user their own account and durable storage for diagrams, before any re
 - Load: list the signed-in user's diagrams, open one to restore its shapes/viewport into the local store
 - shadcn/ui introduced — first real UI chrome (auth form, diagram list, save dialog) beyond the canvas itself
 - `.env.example` + real `.env` for the Supabase URL/anon key (see `CLAUDE.md`'s Environment & secrets section)
-- GitHub Pages deploy workflow
+- GitHub Pages deploy workflow — written and buildable, but not truly "live" until a real (non-local) Supabase project exists and its URL/anon key are added as `SUPABASE_URL`/`SUPABASE_ANON_KEY` repo secrets. Until then the workflow succeeds but ships a build with no working backend.
 
 ### Decisions made here (previously open questions)
 
 - **Auth method: Supabase email/password.** Simplest option sufficient for single-user persistence; OAuth/magic-link can be added later without a schema change if ever needed.
 - **No router yet.** Conditional rendering (signed out → auth form; signed in → diagram list + canvas) instead of adding react-router — not enough distinct pages yet to justify URLs. Revisit if that changes.
 - **One JSONB blob per diagram, not per-shape rows.** `data: jsonb` holds the serialized `{ shapes, viewport }`. Simpler for single-user save/load; per-shape granularity only starts to matter once Stage 5's CRDT needs to merge concurrent edits at the shape level.
+- **Developed and verified against a local Supabase stack** (`supabase start`, via Docker), not a hosted cloud project — auth, RLS, and save/load were all proven end-to-end locally. No real cloud Supabase project exists yet; that's a separate step needed before the deploy workflow actually works (see Scope above).
 
 ### Data model (Postgres)
 
