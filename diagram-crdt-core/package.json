@@ -1,0 +1,20 @@
+{
+  "name": "diagram-crdt-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "watch": "tsc -b --watch",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "yjs": "^13.6.27"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

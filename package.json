@@ -6,17 +6,19 @@
   "workspaces": [
     "diagram-front-react",
     "diagram-supabase-wrapper",
+    "diagram-crdt-core",
     "supabase"
   ],
   "scripts": {
     "dev:front-react": "npm run dev --workspace=diagram-front-react",
     "build:front-react": "npm run build --workspace=diagram-front-react",
     "build:wrapper": "npm run build --workspace=diagram-supabase-wrapper",
+    "build:crdt-core": "npm run build --workspace=diagram-crdt-core",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "npm test --workspace=diagram-front-react",
+    "test": "npm test --workspace=diagram-front-react && npm test --workspace=diagram-crdt-core",
     "prepare": "husky",
     "db:pull": "cd supabase && supabase db pull",
     "db:push": "cd supabase && supabase db push",
