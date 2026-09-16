@@ -1,0 +1,19 @@
+{
+  "name": "diagram-supabase-wrapper",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "watch": "tsc -b --watch"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.109.0",
+    "supabase": "*"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}
