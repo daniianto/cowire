@@ -5,4 +5,5 @@ export * from "./KeyboardHint";
 export * from "./AuthForm";
 export * from "./SaveDialog";
 export * from "./DiagramList";
+export * from "./PresenceIndicator";
 export * from "./App";

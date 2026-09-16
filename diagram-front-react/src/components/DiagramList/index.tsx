@@ -10,8 +10,15 @@ import { Button } from "@/components/ui/button";
 import { useDiagrams } from "@/hooks/useDiagrams";
 import type { DiagramSummary } from "diagram-supabase-wrapper";
 
-export const DiagramList = () => {
-  const { list, load } = useDiagrams();
+type DiagramListProps = {
+  // sets the app's active diagram id; the actual load happens in a single
+  // place (App, keyed off that id) so join-by-link and picking from this
+  // list go through the same code path
+  onSelect: (id: string) => void;
+};
+
+export const DiagramList = ({ onSelect }: DiagramListProps) => {
+  const { list } = useDiagrams();
   const [open, setOpen] = useState(false);
   const [diagrams, setDiagrams] = useState<DiagramSummary[] | null>(null);
 
@@ -21,8 +28,8 @@ export const DiagramList = () => {
     list().then(setDiagrams);
   }, [open, list]);
 
-  const handleLoad = async (id: string) => {
-    await load(id);
+  const handleLoad = (id: string) => {
+    onSelect(id);
     setOpen(false);
   };
 

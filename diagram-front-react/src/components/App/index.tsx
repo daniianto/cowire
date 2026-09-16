@@ -1,13 +1,40 @@
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useDiagrams } from "@/hooks/useDiagrams";
+import { useDiagramRealtime } from "@/hooks/useDiagramRealtime";
 import { AuthForm } from "@/components/AuthForm";
 import { Canvas } from "@/components/Canvas";
 import { KeyboardHint } from "@/components/KeyboardHint";
 import { SaveDialog } from "@/components/SaveDialog";
 import { DiagramList } from "@/components/DiagramList";
+import { PresenceIndicator } from "@/components/PresenceIndicator";
 import { Button } from "@/components/ui/button";
 
 export const App = () => {
   const { session, loading, signOut } = useAuth();
+  const { load } = useDiagrams();
+  // the app's one active-diagram concept: set by picking from "My Diagrams",
+  // by saving a new diagram, or by opening a ?diagram=<id> shared link
+  const [currentDiagramId, setCurrentDiagramId] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get("diagram")
+  );
+  const presentUsers = useDiagramRealtime(currentDiagramId);
+
+  // the single place a diagram actually gets fetched, keyed off the id -
+  // covers both a shared link opened on load and picking one from the list
+  useEffect(() => {
+    if (!currentDiagramId) return;
+    load(currentDiagramId);
+  }, [currentDiagramId, load]);
+
+  const handleCopyLink = async () => {
+    if (!currentDiagramId) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("diagram", currentDiagramId);
+    await navigator.clipboard.writeText(url.toString());
+    toast.success("Link copied");
+  };
 
   // avoid flashing the sign-in form while the initial session check is in flight
   if (loading) return null;
@@ -25,11 +52,17 @@ export const App = () => {
       <Canvas />
       <KeyboardHint />
       <div
-        className="flex gap-2"
+        className="flex items-center gap-2"
         style={{ position: "absolute", top: 8, right: 8 }}
       >
-        <SaveDialog />
-        <DiagramList />
+        <PresenceIndicator users={presentUsers} />
+        <SaveDialog onSaved={setCurrentDiagramId} />
+        <DiagramList onSelect={setCurrentDiagramId} />
+        {currentDiagramId && (
+          <Button variant="outline" size="sm" onClick={handleCopyLink}>
+            Copy Link
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={() => signOut()}>
           Sign out
         </Button>

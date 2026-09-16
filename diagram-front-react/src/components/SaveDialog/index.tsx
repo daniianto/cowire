@@ -12,7 +12,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDiagrams } from "@/hooks/useDiagrams";
 
-export const SaveDialog = () => {
+type SaveDialogProps = {
+  // lets the caller (App) make this the active diagram right after saving,
+  // e.g. so a "Copy Link" button has something to share immediately
+  onSaved?: (id: string) => void;
+};
+
+export const SaveDialog = ({ onSaved }: SaveDialogProps) => {
   const { save } = useDiagrams();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -26,6 +32,7 @@ export const SaveDialog = () => {
     if (summary) {
       setName("");
       setOpen(false);
+      onSaved?.(summary.id);
     }
   };
 
