@@ -32,6 +32,15 @@ type CanvasState = {
   updateShape: (id: string, updates: Partial<Shape>) => void;
   removeShape: (id: string) => void;
 
+  // apply a shape/removal that arrived over the realtime channel: unlike
+  // addShape/removeShape these don't touch undo history (remote edits aren't
+  // this client's actions to undo) and applyRemoteShape upserts the shape
+  // exactly as received - including its zIndex/groupId - instead of
+  // re-assigning them, since those were already decided by whoever created
+  // it on their client
+  applyRemoteShape: (shape: Shape) => void;
+  applyRemoteRemoval: (id: string) => void;
+
   // replaces the selection with one shape's group (or just itself if ungrouped)
   selectShape: (id: string | null) => void;
   // shift-click: toggles one shape's whole group in/out of the selection
@@ -100,6 +109,21 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     }),
 
   removeShape: (id) =>
+    set((state) => {
+      const shapes = { ...state.shapes };
+      delete shapes[id];
+      return {
+        shapes,
+        selectedIds: state.selectedIds.filter((sid) => sid !== id),
+      };
+    }),
+
+  applyRemoteShape: (shape) =>
+    set((state) => ({
+      shapes: { ...state.shapes, [shape.id]: shape },
+    })),
+
+  applyRemoteRemoval: (id) =>
     set((state) => {
       const shapes = { ...state.shapes };
       delete shapes[id];
