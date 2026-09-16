@@ -19,7 +19,7 @@ Let multiple signed-in users edit the _same_ diagram at the same time, with chan
 
 - **Sharing is "anyone with the link," not an email invite.** Loosen RLS so any authenticated user can read/update a diagram if they know its id; only the owner can create/delete their own diagram rows. This sidesteps Stage 3's unverified-email question entirely for now — there's no email lookup involved, just a shared id/URL. The ROADMAP note about revisiting unverified email still applies, but only if/when an actual email-based invite feature gets built, which isn't scoped anywhere yet.
 - **`listDiagrams` stays scoped to "my own" via an explicit query filter**, not RLS alone — now that RLS permits any authenticated user to `select` any diagram (needed so a joined collaborator can read it), the wrapper must filter `.eq("user_id", session.user.id)` itself or "My Diagrams" would list every user's diagrams.
-- **Join-by-link, no router.** A `?diagram=<id>` URL query param auto-joins on load; a "Copy Link" button builds that URL. Plain `URLSearchParams`, not a router — consistent with Stage 3's no-router decision.
+- **Join-by-link, no router.** A `?diagram=<id>` URL query param auto-joins on load; a "Copy Link" button builds that URL. Plain `URLSearchParams`, not a router — consistent with Stage 3's no-router decision. `App` holds the one active-diagram id as state; picking from "My Diagrams" and finishing a save both just set that id, and a single effect keyed on it performs the actual load — one code path for "how a diagram becomes active," whether that's a shared link, a list pick, or a fresh save.
 - **Broadcast payload is the whole shape, not a diff.** On any change, send `{ type: "shape-upsert", shape }` with the complete current shape record (including its `zIndex`/`groupId`), or `{ type: "shape-remove", id }`. Simpler and correctness-friendly; bandwidth-inefficient, which is fine for a stage CRDT will replace anyway.
 - **Remote shapes bypass the normal `addShape` zIndex auto-assignment.** `addShape` deliberately omits `zIndex`/`groupId` and has the store assign them locally (see `CLAUDE.md`) — correct for local creation, wrong for a shape that arrives with a `zIndex` already assigned by whoever created it elsewhere. A new store action (`applyRemoteShape`) upserts the shape exactly as received. Otherwise z-order could silently diverge between clients.
 - **Remote-applied changes don't touch local undo history.** Undo stays a local, per-client concept (already flagged as a rough edge in `CLAUDE.md`'s Performance section from Stage 2) — applying an incoming broadcast must not call `commitHistory()` or push onto `past`.
@@ -54,7 +54,9 @@ create policy "owner delete" on diagrams for delete using (auth.uid () = user_id
 
 ```
 diagram-supabase-wrapper/src/
-└── realtime.ts               # subscribeToDiagram(client, diagramId, handlers), broadcastShapeChange(channel, message)
+└── realtime.ts                # subscribeToDiagram(client, diagramId, presence, handlers) - presence
+                                # is tracked from the start of the join, not added later; also exports
+                                # broadcastShapeChange(channel, message) and unsubscribeFromDiagram(channel)
 
 diagram-front-react/src/
 ├── lib/
