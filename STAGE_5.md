@@ -54,15 +54,21 @@ cowire/
         └── doc.test.ts                   # two Y.Docs edit different fields of the same shape concurrently, merge, both survive
 
 diagram-supabase-wrapper/src/
-└── realtime.ts                           # subscribeToDiagram relays Yjs updates (broadcast/apply) instead of whole-shape
-                                           # JSON messages; still handles presence as in Stage 4; state-vector exchange on join
+└── realtime.ts                           # subscribeToDiagram(client, diagramId, doc, presence, handlers) ->
+                                           # DiagramDocConnection ({ channel, disconnect() }) - owns the whole relay: throttled
+                                           # local-update broadcast, applying incoming updates, and the state-vector handshake
+                                           # on join; presence unchanged from Stage 4
 
 diagram-front-react/src/
 ├── state/
-│   └── canvasStore.ts                    # shapes actions become Y.Doc transactions; past/future + commitHistory/undo/redo
-│                                          # removed in favor of a wrapped Y.UndoManager; applyRemoteShape/applyRemoteRemoval removed
+│   └── canvasStore.ts                    # exports diagramDoc/undoManager alongside useCanvasStore; shapes actions become
+│                                          # Y.Doc transactions; past/future + commitHistory/undo/redo removed in favor of
+│                                          # the wrapped Y.UndoManager (stopCapturing/undo/redo); applyRemoteShape/
+│                                          # applyRemoteRemoval removed - a single observeDeep callback now updates the
+│                                          # `shapes` cache for local and remote changes alike
 └── hooks/
-    └── useDiagramRealtime.ts             # rewritten: relays Yjs updates instead of diffing/broadcasting shape messages
+    └── useDiagramRealtime.ts             # shrank to opening/closing the connection and surfacing presence - all relay
+                                           # logic (throttling, apply, sync handshake) now lives in the wrapper, not here
 ```
 
 ### Removed from Stage 4 (superseded, not kept alongside)
