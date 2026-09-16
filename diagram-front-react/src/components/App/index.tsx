@@ -2,6 +2,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { AuthForm } from "@/components/AuthForm";
 import { Canvas } from "@/components/Canvas";
 import { KeyboardHint } from "@/components/KeyboardHint";
+import { SaveDialog } from "@/components/SaveDialog";
+import { DiagramList } from "@/components/DiagramList";
 import { Button } from "@/components/ui/button";
 
 export const App = () => {
@@ -22,14 +24,16 @@ export const App = () => {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <Canvas />
       <KeyboardHint />
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => signOut()}
+      <div
+        className="flex gap-2"
         style={{ position: "absolute", top: 8, right: 8 }}
       >
-        Sign out
-      </Button>
+        <SaveDialog />
+        <DiagramList />
+        <Button variant="outline" size="sm" onClick={() => signOut()}>
+          Sign out
+        </Button>
+      </div>
     </div>
   );
 };

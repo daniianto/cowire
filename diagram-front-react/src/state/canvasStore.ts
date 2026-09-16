@@ -47,6 +47,12 @@ type CanvasState = {
   setViewport: (viewport: Viewport) => void;
   setMarqueeRect: (rect: BoundingBox | null) => void;
 
+  // atomically replaces the canvas with a loaded diagram's contents.
+  // Clears selection/marquee/undo history too — a freshly loaded diagram
+  // has no undo history of its own, and undoing into the *previous*
+  // diagram's edits would be a correctness bug, not a convenience
+  loadState: (shapes: Record<string, Shape>, viewport: Viewport) => void;
+
   // snapshots current shapes onto the undo stack — call this right before a
   // discrete edit (a whole drag gesture, a group/ungroup, a delete), never
   // per intermediate update, or undo would only revert one animation frame
@@ -187,6 +193,16 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   setTool: (tool) => set({ tool }),
   setViewport: (viewport) => set({ viewport }),
   setMarqueeRect: (rect) => set({ marqueeRect: rect }),
+
+  loadState: (shapes, viewport) =>
+    set({
+      shapes,
+      viewport,
+      selectedIds: [],
+      marqueeRect: null,
+      past: [],
+      future: [],
+    }),
 
   commitHistory: () =>
     set((state) => ({
