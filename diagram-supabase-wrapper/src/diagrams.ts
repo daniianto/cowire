@@ -9,6 +9,27 @@ export type DiagramSummary = {
 
 export type DiagramRecord = DiagramSummary & {
   data: Json;
+  // the Yjs snapshot from Stage 6 onward - null for a diagram saved before
+  // that stage, or one that has never been autosaved/saved since
+  crdtState: Uint8Array | null;
+};
+
+// PostgREST represents a `bytea` column as a "\x"-prefixed hex string on
+// both read and write (confirmed against the real local instance) - these
+// helpers are the only place that encoding is dealt with
+const bytesToHex = (bytes: Uint8Array): string => {
+  let hex = "\\x";
+  for (const b of bytes) hex += b.toString(16).padStart(2, "0");
+  return hex;
+};
+
+const hexToBytes = (hex: string): Uint8Array => {
+  const clean = hex.startsWith("\\x") ? hex.slice(2) : hex;
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
 };
 
 export const listDiagrams = async (
@@ -37,7 +58,7 @@ export const loadDiagram = async (
 ): Promise<DiagramRecord> => {
   const { data, error } = await client
     .from("diagrams")
-    .select("id, name, data, updated_at")
+    .select("id, name, data, crdt_state, updated_at")
     .eq("id", id)
     .single();
   if (error) throw error;
@@ -45,6 +66,7 @@ export const loadDiagram = async (
     id: data.id,
     name: data.name,
     data: data.data,
+    crdtState: data.crdt_state ? hexToBytes(data.crdt_state) : null,
     updatedAt: data.updated_at,
   };
 };
@@ -53,11 +75,12 @@ export const saveDiagram = async (
   client: DiagramSupabaseClient,
   userId: string,
   name: string,
-  data: Json
+  data: Json,
+  crdtState: Uint8Array
 ): Promise<DiagramSummary> => {
   const { data: row, error } = await client
     .from("diagrams")
-    .insert({ user_id: userId, name, data })
+    .insert({ user_id: userId, name, data, crdt_state: bytesToHex(crdtState) })
     .select("id, name, updated_at")
     .single();
   if (error) throw error;
@@ -67,16 +90,30 @@ export const saveDiagram = async (
 export const updateDiagram = async (
   client: DiagramSupabaseClient,
   id: string,
-  data: Json
+  data: Json,
+  crdtState: Uint8Array
 ): Promise<DiagramSummary> => {
   const { data: row, error } = await client
     .from("diagrams")
-    .update({ data })
+    .update({ data, crdt_state: bytesToHex(crdtState) })
     .eq("id", id)
     .select("id, name, updated_at")
     .single();
   if (error) throw error;
   return { id: row.id, name: row.name, updatedAt: row.updated_at };
+};
+
+/** Autosave-only write: refreshes just the CRDT snapshot, leaving `data`/`name` untouched. */
+export const saveDiagramSnapshot = async (
+  client: DiagramSupabaseClient,
+  id: string,
+  crdtState: Uint8Array
+): Promise<void> => {
+  const { error } = await client
+    .from("diagrams")
+    .update({ crdt_state: bytesToHex(crdtState) })
+    .eq("id", id);
+  if (error) throw error;
 };
 
 export const deleteDiagram = async (

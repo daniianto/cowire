@@ -103,3 +103,28 @@ export const getAllShapes = <T extends ShapeRecord>(
   }
   return result;
 };
+
+/** Encodes the doc's full current state for persistence (e.g. to a Postgres bytea column). */
+export const getSnapshot = (doc: Y.Doc): Uint8Array =>
+  Y.encodeStateAsUpdate(doc);
+
+/**
+ * Replaces the doc's shapes with a previously-encoded snapshot. Goes through
+ * a scratch doc rather than clearing+replaying the update directly on
+ * `doc`: a Yjs delete is permanent and is never undone by re-integrating the
+ * original insert, so clear-then-`applyUpdate` on the same doc silently
+ * loses everything if this ever runs twice for the same snapshot (which
+ * React alone can trigger, e.g. StrictMode's double effect invocation) -
+ * going through `replaceAllShapes` with freshly-minted items instead makes
+ * this safe to call any number of times.
+ */
+export const loadSnapshot = (
+  doc: Y.Doc,
+  snapshot: Uint8Array,
+  origin?: unknown
+): void => {
+  const scratch = new Y.Doc();
+  Y.applyUpdate(scratch, snapshot);
+  replaceAllShapes(doc, getAllShapes(scratch), origin);
+  scratch.destroy();
+};

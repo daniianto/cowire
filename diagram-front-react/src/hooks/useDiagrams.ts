@@ -6,14 +6,16 @@ import {
   loadDiagram as loadDiagramRequest,
   type DiagramSummary,
 } from "diagram-supabase-wrapper";
+import { getSnapshot } from "diagram-crdt-core";
 import { useSupabase } from "@/supabase/hooks";
-import { useCanvasStore } from "@/state";
+import { diagramDoc, useCanvasStore } from "@/state";
 import type { Shape, Viewport } from "@/lib/geometry";
 
-type SerializedDiagram = {
-  shapes: Record<string, Shape>;
-  viewport: Viewport;
-};
+type DiagramData = { viewport: Viewport };
+// pre-Stage-6 diagrams stored their shapes as plain JSON here too, since
+// there was no CRDT snapshot yet - `shapes` is only ever read as a
+// one-time fallback for a diagram saved before that stage
+type LegacyDiagramData = DiagramData & { shapes?: Record<string, Shape> };
 
 // save/load failures aren't tied to a specific form field (there's no
 // persistent form to attach an inline error to) — they're the outcome of a
@@ -32,10 +34,17 @@ export const useDiagrams = () => {
   const save = useCallback(
     async (name: string): Promise<DiagramSummary | undefined> => {
       if (!session) return undefined;
-      const { shapes, viewport } = useCanvasStore.getState();
-      const data: SerializedDiagram = { shapes, viewport };
+      const { viewport } = useCanvasStore.getState();
+      const data: DiagramData = { viewport };
+      const crdtState = getSnapshot(diagramDoc);
       try {
-        const summary = await saveDiagram(client, session.user.id, name, data);
+        const summary = await saveDiagram(
+          client,
+          session.user.id,
+          name,
+          data,
+          crdtState
+        );
         toast.success(`Saved "${summary.name}"`);
         return summary;
       } catch {
@@ -50,8 +59,16 @@ export const useDiagrams = () => {
     async (id: string): Promise<void> => {
       try {
         const record = await loadDiagramRequest(client, id);
-        const data = record.data as SerializedDiagram;
-        useCanvasStore.getState().loadState(data.shapes, data.viewport);
+        const data = record.data as LegacyDiagramData;
+        if (record.crdtState) {
+          useCanvasStore
+            .getState()
+            .loadSnapshot(record.crdtState, data.viewport);
+        } else {
+          // fallback for a diagram saved before Stage 6 - the next save or
+          // autosave gives it a real snapshot
+          useCanvasStore.getState().loadState(data.shapes ?? {}, data.viewport);
+        }
         toast.success(`Loaded "${record.name}"`);
       } catch {
         toast.error("Failed to load diagram");

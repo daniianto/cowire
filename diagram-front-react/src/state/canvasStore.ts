@@ -5,6 +5,7 @@ import {
   createLocalUndoManager,
   getAllShapes,
   getShapesMap,
+  loadSnapshot as loadSnapshotIntoDoc,
   removeShape as removeShapeFromDoc,
   replaceAllShapes,
   setShape,
@@ -67,8 +68,13 @@ type CanvasState = {
   // atomically replaces the canvas with a loaded diagram's contents.
   // Clears selection/marquee/undo history too — a freshly loaded diagram
   // has no undo history of its own, and undoing into the *previous*
-  // diagram's edits would be a correctness bug, not a convenience
+  // diagram's edits would be a correctness bug, not a convenience.
+  // loadState is the legacy (pre-Stage-6) path: a plain shape list, used as
+  // a one-time fallback for a diagram saved before CRDT snapshots existed.
+  // loadSnapshot is the normal path from Stage 6 on: a real Yjs snapshot,
+  // which also gives a reconnecting client actual merge history to build on.
   loadState: (shapes: Record<string, Shape>, viewport: Viewport) => void;
+  loadSnapshot: (snapshot: Uint8Array, viewport: Viewport) => void;
 
   // ends the current undo-grouping window - call this right before a
   // discrete edit starts (a whole drag gesture, a group/ungroup, a delete),
@@ -182,6 +188,12 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   loadState: (shapes, viewport) => {
     undoManager.clear();
     replaceAllShapes(diagramDoc, shapes, localOrigin);
+    set({ viewport, selectedIds: [], marqueeRect: null });
+  },
+
+  loadSnapshot: (snapshot, viewport) => {
+    undoManager.clear();
+    loadSnapshotIntoDoc(diagramDoc, snapshot, localOrigin);
     set({ viewport, selectedIds: [], marqueeRect: null });
   },
 

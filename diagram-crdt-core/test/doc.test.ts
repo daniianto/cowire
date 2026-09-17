@@ -3,6 +3,8 @@ import * as Y from "yjs";
 import {
   createDiagramDoc,
   getAllShapes,
+  getSnapshot,
+  loadSnapshot,
   removeShape,
   replaceAllShapes,
   setShape,
@@ -63,6 +65,40 @@ describe("setShape / getAllShapes", () => {
     const r2 = { ...rect, id: "r2" };
     replaceAllShapes(doc, { r2 });
     expect(getAllShapes(doc)).toEqual({ r2 });
+  });
+});
+
+describe("getSnapshot / loadSnapshot", () => {
+  it("reconstructs shapes from a snapshot into a fresh doc", () => {
+    const source = createDiagramDoc();
+    setShape(source, "r1", rect);
+    const snapshot = getSnapshot(source);
+
+    const target = createDiagramDoc();
+    loadSnapshot(target, snapshot);
+    expect(getAllShapes(target)).toEqual({ r1: rect });
+  });
+
+  it("replaces (not merges with) whatever the doc already had", () => {
+    const source = createDiagramDoc();
+    setShape(source, "r1", rect);
+    const snapshot = getSnapshot(source);
+
+    const target = createDiagramDoc();
+    setShape(target, "stale", { ...rect, id: "stale" });
+    loadSnapshot(target, snapshot);
+    expect(getAllShapes(target)).toEqual({ r1: rect });
+  });
+
+  it("stays correct when called twice in a row on the same doc (regression: a raw clear+applyUpdate silently loses everything the second time, since a Yjs delete is never undone by re-integrating the original insert)", () => {
+    const source = createDiagramDoc();
+    setShape(source, "r1", rect);
+    const snapshot = getSnapshot(source);
+
+    const target = createDiagramDoc();
+    loadSnapshot(target, snapshot);
+    loadSnapshot(target, snapshot);
+    expect(getAllShapes(target)).toEqual({ r1: rect });
   });
 });
 
