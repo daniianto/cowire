@@ -45,10 +45,16 @@ diagram-supabase-wrapper/src/
                                   # on every SUBSCRIBED after the first, and reports connection status changes
 
 diagram-front-react/src/
+├── state/
+│   └── awareness.ts             # new: a tiny shared holder (setActiveAwareness/getActiveAwareness) so
+│                                 # useCanvasInteraction can publish cursor moves without importing
+│                                 # useDiagramRealtime - the two hooks don't otherwise know about each other
 ├── hooks/
-│   ├── useDiagramRealtime.ts    # publishes local cursor position (throttled) via awareness; surfaces peer
-│   │                             # awareness states instead of Supabase presence; toasts on disconnect/reconnect
-│   └── useCanvasInteraction.ts  # + two-pointer pinch-zoom/pan gesture path; Delete handler uses removeManyShapes
+│   ├── useDiagramRealtime.ts    # owns the Awareness instance itself (created per join, via state/awareness.ts);
+│   │                             # surfaces peer awareness states instead of Supabase presence; toasts on
+│   │                             # disconnect/reconnect
+│   └── useCanvasInteraction.ts  # + two-pointer pinch-zoom/pan gesture path (reads state/awareness.ts to publish
+│                                 # cursor position); Delete handler uses removeShapes -> removeManyShapes
 └── components/
     ├── PresenceIndicator/index.tsx  # colored avatars, from awareness state instead of Supabase presence
     ├── RemoteCursors/index.tsx      # new: renders other clients' live cursor positions in their color
