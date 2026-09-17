@@ -61,6 +61,18 @@ export const removeShape = (doc: Y.Doc, id: string, origin?: unknown): void => {
   }, origin);
 };
 
+/** Removes several shapes as a single transaction (one undo step, one merged broadcast) - e.g. deleting a whole group at once. */
+export const removeManyShapes = (
+  doc: Y.Doc,
+  ids: string[],
+  origin?: unknown
+): void => {
+  doc.transact(() => {
+    const shapesMap = getShapesMap(doc);
+    for (const id of ids) shapesMap.delete(id);
+  }, origin);
+};
+
 /** Merges different field updates into several existing shapes as a single transaction (one undo step, one merged broadcast). */
 export const updateManyShapeFields = (
   doc: Y.Doc,

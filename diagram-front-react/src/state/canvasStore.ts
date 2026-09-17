@@ -6,6 +6,7 @@ import {
   getAllShapes,
   getShapesMap,
   loadSnapshot as loadSnapshotIntoDoc,
+  removeManyShapes,
   removeShape as removeShapeFromDoc,
   replaceAllShapes,
   setShape,
@@ -49,6 +50,9 @@ type CanvasState = {
   addShape: (shape: NewShape) => void;
   updateShape: (id: string, updates: Partial<Shape>) => void;
   removeShape: (id: string) => void;
+  // deletes several shapes as one transaction/undo step - e.g. a whole
+  // group at once, rather than N separate removeShape calls
+  removeShapes: (ids: string[]) => void;
 
   // replaces the selection with one shape's group (or just itself if ungrouped)
   selectShape: (id: string | null) => void;
@@ -113,6 +117,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   removeShape: (id) => removeShapeFromDoc(diagramDoc, id, localOrigin),
+
+  removeShapes: (ids) => removeManyShapes(diagramDoc, ids, localOrigin),
 
   selectShape: (id) =>
     set((state) => ({

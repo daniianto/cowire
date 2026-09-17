@@ -5,6 +5,7 @@ import {
   getAllShapes,
   getSnapshot,
   loadSnapshot,
+  removeManyShapes,
   removeShape,
   replaceAllShapes,
   setShape,
@@ -44,6 +45,15 @@ describe("setShape / getAllShapes", () => {
     setShape(doc, "r1", rect);
     removeShape(doc, "r1");
     expect(getAllShapes(doc)).toEqual({});
+  });
+
+  it("removes several shapes in one transaction", () => {
+    const doc = createDiagramDoc();
+    setShape(doc, "r1", rect);
+    setShape(doc, "r2", { ...rect, id: "r2" });
+    setShape(doc, "r3", { ...rect, id: "r3" });
+    removeManyShapes(doc, ["r1", "r3"]);
+    expect(getAllShapes(doc)).toEqual({ r2: { ...rect, id: "r2" } });
   });
 
   it("updates fields on several shapes in one transaction", () => {

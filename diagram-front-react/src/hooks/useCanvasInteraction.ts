@@ -111,7 +111,7 @@ export const useCanvasInteraction = (
     const handleKeyDown = (e: KeyboardEvent) => {
       const {
         selectedIds,
-        removeShape,
+        removeShapes,
         setTool,
         selectShape,
         groupSelected,
@@ -131,7 +131,7 @@ export const useCanvasInteraction = (
       } else if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedIds.length > 0) {
           stopCapturing();
-          for (const id of selectedIds) removeShape(id);
+          removeShapes(selectedIds);
         }
       } else if (e.key === "r" || e.key === "R") {
         setTool("rectangle");
