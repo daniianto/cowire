@@ -36,6 +36,7 @@ export type Database = {
     Tables: {
       diagrams: {
         Row: {
+          crdt_state: string | null;
           created_at: string;
           data: Json;
           id: string;
@@ -44,6 +45,7 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          crdt_state?: string | null;
           created_at?: string;
           data: Json;
           id?: string;
@@ -52,6 +54,7 @@ export type Database = {
           user_id: string;
         };
         Update: {
+          crdt_state?: string | null;
           created_at?: string;
           data?: Json;
           id?: string;
