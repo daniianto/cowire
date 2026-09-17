@@ -10,6 +10,7 @@ import { KeyboardHint } from "@/components/KeyboardHint";
 import { SaveDialog } from "@/components/SaveDialog";
 import { DiagramList } from "@/components/DiagramList";
 import { PresenceIndicator } from "@/components/PresenceIndicator";
+import { RemoteCursors } from "@/components/RemoteCursors";
 import { Button } from "@/components/ui/button";
 
 export const App = () => {
@@ -20,7 +21,7 @@ export const App = () => {
   const [currentDiagramId, setCurrentDiagramId] = useState<string | null>(() =>
     new URLSearchParams(window.location.search).get("diagram")
   );
-  const presentUsers = useDiagramRealtime(currentDiagramId);
+  const peers = useDiagramRealtime(currentDiagramId);
   useDiagramAutosave(currentDiagramId);
 
   // the single place a diagram actually gets fetched, keyed off the id -
@@ -52,12 +53,13 @@ export const App = () => {
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <Canvas />
+      <RemoteCursors peers={peers} />
       <KeyboardHint />
       <div
         className="flex items-center gap-2"
         style={{ position: "absolute", top: 8, right: 8 }}
       >
-        <PresenceIndicator users={presentUsers} />
+        <PresenceIndicator users={peers} />
         <SaveDialog onSaved={setCurrentDiagramId} />
         <DiagramList onSelect={setCurrentDiagramId} />
         {currentDiagramId && (

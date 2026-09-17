@@ -6,4 +6,5 @@ export * from "./AuthForm";
 export * from "./SaveDialog";
 export * from "./DiagramList";
 export * from "./PresenceIndicator";
+export * from "./RemoteCursors";
 export * from "./App";

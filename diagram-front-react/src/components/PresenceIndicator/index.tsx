@@ -1,10 +1,11 @@
-import type { PresenceInfo } from "diagram-supabase-wrapper";
+import type { PeerAwarenessState } from "diagram-crdt-core";
 
 type PresenceIndicatorProps = {
-  users: PresenceInfo[];
+  users: PeerAwarenessState[];
 };
 
-// minimal "who's here" list - initials only, no live cursors/colors (Stage 7)
+// minimal "who's here" list - colored initials, matching each user's live
+// cursor color (see RemoteCursors); no richer profile info than that
 export const PresenceIndicator = ({ users }: PresenceIndicatorProps) => {
   if (users.length === 0) return null;
 
@@ -14,7 +15,8 @@ export const PresenceIndicator = ({ users }: PresenceIndicatorProps) => {
         <span
           key={user.userId}
           title={user.email}
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground"
+          style={{ backgroundColor: user.color }}
+          className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium text-white"
         >
           {user.email.slice(0, 2).toUpperCase()}
         </span>

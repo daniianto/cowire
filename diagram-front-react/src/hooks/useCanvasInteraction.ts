@@ -11,7 +11,8 @@ import {
   type Point,
   type Shape,
 } from "@/lib/geometry";
-import { useCanvasStore } from "@/state";
+import { setLocalCursor } from "diagram-crdt-core";
+import { getActiveAwareness, useCanvasStore } from "@/state";
 
 const DEFAULT_SHAPE_COLOR = "#94a3b8";
 const DEFAULT_ARROW_COLOR = "#334155";
@@ -378,6 +379,17 @@ export const useCanvasInteraction = (
     };
 
     const handlePointerMove = (e: PointerEvent) => {
+      // published unconditionally (not just mid-gesture) so peers see where
+      // this client's pointer is even while it's just hovering
+      const awareness = getActiveAwareness();
+      if (awareness) {
+        const point = screenToCanvas(
+          toScreenPoint(e, canvas),
+          useCanvasStore.getState().viewport
+        );
+        setLocalCursor(awareness, point);
+      }
+
       const drag = dragRef.current;
       if (!drag) return;
 
@@ -606,10 +618,18 @@ export const useCanvasInteraction = (
       });
     };
 
+    // don't leave a stale cursor showing for peers once this pointer leaves
+    // the canvas entirely
+    const handlePointerLeave = () => {
+      const awareness = getActiveAwareness();
+      if (awareness) setLocalCursor(awareness, null);
+    };
+
     window.addEventListener("keydown", handleKeyDown);
     canvas.addEventListener("pointerdown", handlePointerDown);
     canvas.addEventListener("pointermove", handlePointerMove);
     canvas.addEventListener("pointerup", handlePointerUp);
+    canvas.addEventListener("pointerleave", handlePointerLeave);
     canvas.addEventListener("wheel", handleWheel, { passive: false });
 
     return () => {
@@ -617,6 +637,7 @@ export const useCanvasInteraction = (
       canvas.removeEventListener("pointerdown", handlePointerDown);
       canvas.removeEventListener("pointermove", handlePointerMove);
       canvas.removeEventListener("pointerup", handlePointerUp);
+      canvas.removeEventListener("pointerleave", handlePointerLeave);
       canvas.removeEventListener("wheel", handleWheel);
     };
   }, [canvasRef]);
