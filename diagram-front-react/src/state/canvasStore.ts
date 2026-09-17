@@ -44,6 +44,9 @@ type CanvasState = {
   viewport: Viewport;
   // in-progress marquee/rubber-band rect (canvas space), or null when not dragging one
   marqueeRect: BoundingBox | null;
+  // id of the shape currently under the pointer (not mid-gesture), or null -
+  // drives the hover hint tooltip; purely local UI state, not shared
+  hoveredShapeId: string | null;
 
   // zIndex/groupId are bookkeeping the store owns: new shapes always start
   // on top of everything else and ungrouped
@@ -68,6 +71,7 @@ type CanvasState = {
   setTool: (tool: Tool) => void;
   setViewport: (viewport: Viewport) => void;
   setMarqueeRect: (rect: BoundingBox | null) => void;
+  setHoveredShapeId: (id: string | null) => void;
 
   // atomically replaces the canvas with a loaded diagram's contents.
   // Clears selection/marquee/undo history too — a freshly loaded diagram
@@ -95,6 +99,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   tool: "select",
   viewport: { offsetX: 0, offsetY: 0, zoom: 1 },
   marqueeRect: null,
+  hoveredShapeId: null,
 
   addShape: (shape) => {
     const topZIndex = Object.values(get().shapes).reduce(
@@ -190,6 +195,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   setTool: (tool) => set({ tool }),
   setViewport: (viewport) => set({ viewport }),
   setMarqueeRect: (rect) => set({ marqueeRect: rect }),
+  setHoveredShapeId: (id) => set({ hoveredShapeId: id }),
 
   loadState: (shapes, viewport) => {
     undoManager.clear();

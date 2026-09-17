@@ -226,6 +226,9 @@ export const useCanvasInteraction = (
       }
 
       canvas.setPointerCapture(e.pointerId);
+      // a real gesture is starting - drop the hover hint rather than let it
+      // sit stale over wherever the pointer was before the drag began
+      useCanvasStore.getState().setHoveredShapeId(null);
       const {
         shapes,
         selectedIds,
@@ -442,7 +445,16 @@ export const useCanvasInteraction = (
       }
 
       const drag = dragRef.current;
-      if (!drag) return;
+      if (!drag) {
+        // not mid-gesture - just update which shape (if any) is hovered,
+        // for the hover hint tooltip
+        const { shapes, viewport, hoveredShapeId, setHoveredShapeId } =
+          useCanvasStore.getState();
+        const canvasPoint = screenToCanvas(toScreenPoint(e, canvas), viewport);
+        const hitId = findShapeAt(canvasPoint, shapes)?.id ?? null;
+        if (hitId !== hoveredShapeId) setHoveredShapeId(hitId);
+        return;
+      }
 
       const {
         shapes,
@@ -679,6 +691,7 @@ export const useCanvasInteraction = (
     const handlePointerLeave = () => {
       const awareness = getActiveAwareness();
       if (awareness) setLocalCursor(awareness, null);
+      useCanvasStore.getState().setHoveredShapeId(null);
     };
 
     window.addEventListener("keydown", handleKeyDown);
