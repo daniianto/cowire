@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "y-protocols": "^1.0.6",
     "yjs": "^13.6.27"
   },
   "devDependencies": {
