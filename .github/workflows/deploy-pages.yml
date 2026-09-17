@@ -26,6 +26,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:wrapper
+      - run: npm run build:crdt-core
       - run: npm run build:front-react
         env:
           # set these as repo secrets (Settings > Secrets and variables >
