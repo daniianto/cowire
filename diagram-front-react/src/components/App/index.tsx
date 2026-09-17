@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useDiagrams } from "@/hooks/useDiagrams";
 import { useDiagramRealtime } from "@/hooks/useDiagramRealtime";
+import { useDiagramAutosave } from "@/hooks/useDiagramAutosave";
 import { AuthForm } from "@/components/AuthForm";
 import { Canvas } from "@/components/Canvas";
 import { KeyboardHint } from "@/components/KeyboardHint";
@@ -20,6 +21,7 @@ export const App = () => {
     new URLSearchParams(window.location.search).get("diagram")
   );
   const presentUsers = useDiagramRealtime(currentDiagramId);
+  useDiagramAutosave(currentDiagramId);
 
   // the single place a diagram actually gets fetched, keyed off the id -
   // covers both a shared link opened on load and picking one from the list
