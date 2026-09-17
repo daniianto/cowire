@@ -99,16 +99,25 @@ export const useCanvasInteraction = (
 ) => {
   const dragRef = useRef<DragState>(null);
 
+  // pinch-zoom/two-finger pan tracking - independent of dragRef's
+  // single-pointer state machine above. A second finger coming down always
+  // cancels whatever single-touch gesture dragRef was tracking, since two
+  // fingers means "zoom/pan", not "draw/move/resize"
+  const touchPointsRef = useRef<Map<number, Point>>(new Map());
+  const pinchStateRef = useRef<{ distance: number; midpoint: Point } | null>(
+    null
+  );
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // no toolbar exists yet (out of scope until shadcn/ui components land),
-    // so tool switching, grouping, reordering, undo/redo, and delete are all
-    // keyboard-only: R/C/A/L pick a shape tool, G/Shift+G group/ungroup,
-    // ]/[ bring-to-front/send-to-back, Cmd|Ctrl+Z/Shift+Z undo/redo, Escape
-    // goes back to select tool and deselects, Delete/Backspace removes the
-    // selection
+    // tool switching also has an on-screen Toolbar (Stage 7, for touch
+    // devices with no keyboard) - these shortcuts stay as a faster desktop
+    // path, not a replacement: R/C/A/L pick a shape tool, G/Shift+G
+    // group/ungroup, ]/[ bring-to-front/send-to-back, Cmd|Ctrl+Z/Shift+Z
+    // undo/redo, Escape goes back to select tool and deselects,
+    // Delete/Backspace removes the selection
     const handleKeyDown = (e: KeyboardEvent) => {
       const {
         selectedIds,
@@ -207,6 +216,15 @@ export const useCanvasInteraction = (
     };
 
     const handlePointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "touch") {
+        touchPointsRef.current.set(e.pointerId, toScreenPoint(e, canvas));
+        if (touchPointsRef.current.size >= 2) {
+          dragRef.current = null;
+          pinchStateRef.current = null;
+          return;
+        }
+      }
+
       canvas.setPointerCapture(e.pointerId);
       const {
         shapes,
@@ -379,6 +397,39 @@ export const useCanvasInteraction = (
     };
 
     const handlePointerMove = (e: PointerEvent) => {
+      if (
+        e.pointerType === "touch" &&
+        touchPointsRef.current.has(e.pointerId)
+      ) {
+        touchPointsRef.current.set(e.pointerId, toScreenPoint(e, canvas));
+        if (touchPointsRef.current.size === 2) {
+          const [p1, p2] = Array.from(touchPointsRef.current.values());
+          const distance = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          const midpoint = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
+          const prev = pinchStateRef.current;
+          if (prev) {
+            const { viewport, setViewport } = useCanvasStore.getState();
+            // same "keep a fixed canvas point anchored on screen" math as
+            // handleWheel, but anchored to the previous midpoint - combines
+            // zoom (distance changed) and pan (midpoint moved) in one step
+            const canvasPointBefore = screenToCanvas(prev.midpoint, viewport);
+            const zoomFactor = distance / prev.distance;
+            const zoom = Math.min(
+              MAX_ZOOM,
+              Math.max(MIN_ZOOM, viewport.zoom * zoomFactor)
+            );
+            setViewport({
+              zoom,
+              offsetX: midpoint.x - canvasPointBefore.x * zoom,
+              offsetY: midpoint.y - canvasPointBefore.y * zoom,
+            });
+          }
+          pinchStateRef.current = { distance, midpoint };
+          return;
+        }
+      }
+
       // published unconditionally (not just mid-gesture) so peers see where
       // this client's pointer is even while it's just hovering
       const awareness = getActiveAwareness();
@@ -530,7 +581,12 @@ export const useCanvasInteraction = (
       }
     };
 
-    const handlePointerUp = () => {
+    const handlePointerUp = (e: PointerEvent) => {
+      if (e.pointerType === "touch") {
+        touchPointsRef.current.delete(e.pointerId);
+        pinchStateRef.current = null;
+      }
+
       const drag = dragRef.current;
       dragRef.current = null;
       if (!drag || drag.mode === "panning" || drag.mode === "moving") return;
@@ -629,6 +685,7 @@ export const useCanvasInteraction = (
     canvas.addEventListener("pointerdown", handlePointerDown);
     canvas.addEventListener("pointermove", handlePointerMove);
     canvas.addEventListener("pointerup", handlePointerUp);
+    canvas.addEventListener("pointercancel", handlePointerUp);
     canvas.addEventListener("pointerleave", handlePointerLeave);
     canvas.addEventListener("wheel", handleWheel, { passive: false });
 
@@ -637,6 +694,7 @@ export const useCanvasInteraction = (
       canvas.removeEventListener("pointerdown", handlePointerDown);
       canvas.removeEventListener("pointermove", handlePointerMove);
       canvas.removeEventListener("pointerup", handlePointerUp);
+      canvas.removeEventListener("pointercancel", handlePointerUp);
       canvas.removeEventListener("pointerleave", handlePointerLeave);
       canvas.removeEventListener("wheel", handleWheel);
     };

@@ -75,7 +75,14 @@ export const Canvas = () => {
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: "100%", height: "100%", display: "block" }}
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "block",
+        // otherwise the browser's own pinch-zoom/pan gestures intercept
+        // touches before useCanvasInteraction ever sees them
+        touchAction: "none",
+      }}
     />
   );
 };

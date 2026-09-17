@@ -11,6 +11,7 @@ import { SaveDialog } from "@/components/SaveDialog";
 import { DiagramList } from "@/components/DiagramList";
 import { PresenceIndicator } from "@/components/PresenceIndicator";
 import { RemoteCursors } from "@/components/RemoteCursors";
+import { Toolbar } from "@/components/Toolbar";
 import { Button } from "@/components/ui/button";
 
 export const App = () => {
@@ -55,6 +56,16 @@ export const App = () => {
       <Canvas />
       <RemoteCursors peers={peers} />
       <KeyboardHint />
+      <div
+        style={{
+          position: "absolute",
+          bottom: 8,
+          left: "50%",
+          transform: "translateX(-50%)",
+        }}
+      >
+        <Toolbar />
+      </div>
       <div
         className="flex items-center gap-2"
         style={{ position: "absolute", top: 8, right: 8 }}
