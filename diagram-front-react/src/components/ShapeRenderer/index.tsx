@@ -1,4 +1,8 @@
-import { getBoundingBox, type Shape } from "@/lib/geometry";
+import {
+  getBoundingBox,
+  getContrastTextColor,
+  type Shape,
+} from "@/lib/geometry";
 
 // canvas drawing runs inside a requestAnimationFrame loop rather than React's
 // render cycle, so this "component" exports an imperative draw function
@@ -10,27 +14,74 @@ export const renderShape = (
   ctx.fillStyle = shape.color;
 
   switch (shape.type) {
-    case "rectangle":
+    case "rectangle": {
+      const box = getBoundingBox(shape);
+      ctx.fillRect(box.x, box.y, box.width, box.height);
+      if (shape.label) {
+        drawCenteredLabel(
+          ctx,
+          shape.label,
+          box.x + box.width / 2,
+          box.y + box.height / 2,
+          getContrastTextColor(shape.color)
+        );
+      }
+      break;
+    }
     case "label": {
       const box = getBoundingBox(shape);
       ctx.fillRect(box.x, box.y, box.width, box.height);
-      if (shape.type === "label") {
-        ctx.fillStyle = "#0f172a";
-        ctx.font = `${shape.fontSize}px system-ui, sans-serif`;
-        ctx.textBaseline = "middle";
-        ctx.fillText(shape.text, box.x + 4, box.y + box.height / 2);
-      }
+      ctx.fillStyle = "#0f172a";
+      ctx.font = `${shape.fontSize}px system-ui, sans-serif`;
+      ctx.textBaseline = "middle";
+      ctx.fillText(shape.text, box.x + 4, box.y + box.height / 2);
       break;
     }
     case "circle":
       ctx.beginPath();
       ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
       ctx.fill();
+      if (shape.label) {
+        drawCenteredLabel(
+          ctx,
+          shape.label,
+          shape.x,
+          shape.y,
+          getContrastTextColor(shape.color)
+        );
+      }
       break;
     case "arrow":
       drawArrow(ctx, shape.x1, shape.y1, shape.x2, shape.y2, shape.color);
+      if (shape.label) {
+        // no fill behind an arrow's label to contrast against, so it always
+        // uses a fixed dark color rather than getContrastTextColor
+        drawCenteredLabel(
+          ctx,
+          shape.label,
+          (shape.x1 + shape.x2) / 2,
+          (shape.y1 + shape.y2) / 2,
+          "#0f172a"
+        );
+      }
       break;
   }
+};
+
+const drawCenteredLabel = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  centerX: number,
+  centerY: number,
+  textColor: string
+): void => {
+  ctx.save();
+  ctx.fillStyle = textColor;
+  ctx.font = "13px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, centerX, centerY);
+  ctx.restore();
 };
 
 const ARROWHEAD_LENGTH = 12;

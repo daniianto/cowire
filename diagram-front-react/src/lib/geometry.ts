@@ -32,6 +32,9 @@ export type RectangleShape = BaseShape & {
   y: number;
   width: number;
   height: number;
+  // an optional caption rendered on the shape - distinct from LabelShape
+  // below, which *is* a standalone text shape rather than a property
+  label?: string;
 };
 
 export type CircleShape = BaseShape & {
@@ -39,6 +42,7 @@ export type CircleShape = BaseShape & {
   x: number; // center
   y: number; // center
   radius: number;
+  label?: string;
 };
 
 export type ArrowShape = BaseShape & {
@@ -47,6 +51,12 @@ export type ArrowShape = BaseShape & {
   y1: number;
   x2: number;
   y2: number;
+  label?: string;
+  // id of the shape this endpoint is bound to, or null if it's a free
+  // point - see resolveArrowEndpoints, which is what actually keeps a
+  // bound endpoint on the target shape's edge
+  startAttachedToId: string | null;
+  endAttachedToId: string | null;
 };
 
 export type LabelShape = BaseShape & {
@@ -260,3 +270,17 @@ export const canvasToScreen = (point: Point, viewport: Viewport): Point => ({
   x: point.x * viewport.zoom + viewport.offsetX,
   y: point.y * viewport.zoom + viewport.offsetY,
 });
+
+/**
+ * Picks black or white text for readability against a `#rrggbb` background
+ * color (relative luminance) — used for a shape's label, so it stays
+ * legible regardless of the shape's own color.
+ */
+export const getContrastTextColor = (hexColor: string): string => {
+  const hex = hexColor.replace("#", "");
+  const r = parseInt(hex.slice(0, 2), 16) / 255;
+  const g = parseInt(hex.slice(2, 4), 16) / 255;
+  const b = parseInt(hex.slice(4, 6), 16) / 255;
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.5 ? "#000000" : "#ffffff";
+};

@@ -8,6 +8,7 @@ import {
   isPointInArrowHandle,
   screenToCanvas,
   canvasToScreen,
+  getContrastTextColor,
   type RectangleShape,
   type CircleShape,
   type ArrowShape,
@@ -49,6 +50,8 @@ const arrow = (overrides: Partial<ArrowShape> = {}): ArrowShape => ({
   x2: 100,
   y2: 0,
   color: "#000000",
+  startAttachedToId: null,
+  endAttachedToId: null,
   ...overrides,
 });
 
@@ -246,5 +249,15 @@ describe("screenToCanvas / canvasToScreen", () => {
       x: 200,
       y: 300,
     });
+  });
+});
+
+describe("getContrastTextColor", () => {
+  it("picks black text on a light background", () => {
+    expect(getContrastTextColor("#ffffff")).toBe("#000000");
+  });
+
+  it("picks white text on a dark background", () => {
+    expect(getContrastTextColor("#000000")).toBe("#ffffff");
   });
 });

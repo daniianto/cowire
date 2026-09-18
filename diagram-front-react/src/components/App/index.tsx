@@ -11,6 +11,7 @@ import { DiagramList } from "@/components/DiagramList";
 import { PresenceIndicator } from "@/components/PresenceIndicator";
 import { RemoteCursors } from "@/components/RemoteCursors";
 import { Toolbar } from "@/components/Toolbar";
+import { Inspector } from "@/components/Inspector";
 import { Button } from "@/components/ui/button";
 
 export const App = () => {
@@ -54,6 +55,7 @@ export const App = () => {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <Canvas />
       <RemoteCursors peers={peers} />
+      <Inspector />
       <div
         style={{
           position: "absolute",

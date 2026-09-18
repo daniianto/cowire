@@ -289,6 +289,8 @@ export const useCanvasInteraction = (
           x2: canvasPoint.x,
           y2: canvasPoint.y,
           color: DEFAULT_ARROW_COLOR,
+          startAttachedToId: null,
+          endAttachedToId: null,
         };
         stopCapturing();
         addShape(shape);
