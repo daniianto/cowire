@@ -120,7 +120,6 @@ A few of the more consequential calls made along the way — see the individual 
 
 - **No coordination between multiple autosaving clients.** Any connected client can autosave; an older write landing after a newer one could in theory regress the stored snapshot. Accepted as a known race at this project's scale.
 - **No offline/local-first editing.** Reconnect handling catches a client back up after a dropped connection, but it doesn't queue or replay edits made while actually disconnected.
-- **Undo/redo is local and per-client only.** It never affects remote peers and only undoes this client's own edits — by design, but can feel surprising in a fast-moving multi-user session.
 - **No drag-and-drop layer reordering** — the layer tree only supports front/back buttons, not arbitrary reordering.
 - **No multi-shape color/label editing** — the Inspector only appears for a single selected shape.
 - **No arrow-to-arrow attachment** — arrows/lines can only anchor to rectangle/circle/ellipse/triangle/diamond/label shapes.
