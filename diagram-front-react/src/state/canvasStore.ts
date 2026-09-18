@@ -73,6 +73,10 @@ type CanvasState = {
   ungroupSelected: () => void;
   bringSelectedToFront: () => void;
   sendSelectedToBack: () => void;
+  // reassigns zIndex for every shape in `orderedIds` (front-to-back, i.e.
+  // orderedIds[0] ends up drawn on top) to match a manual layer-tree
+  // drag-and-drop reorder
+  reorderShapes: (orderedIds: string[]) => void;
 
   setTool: (tool: Tool) => void;
   setViewport: (viewport: Viewport) => void;
@@ -192,6 +196,15 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const updates: Record<string, ShapeRecord> = {};
     selectedIds.forEach((id, i) => {
       updates[id] = { zIndex: bottomZIndex - selectedIds.length + i };
+    });
+    updateManyShapeFields(diagramDoc, updates, localOrigin);
+  },
+
+  reorderShapes: (orderedIds) => {
+    const updates: Record<string, ShapeRecord> = {};
+    const top = orderedIds.length - 1;
+    orderedIds.forEach((id, i) => {
+      updates[id] = { zIndex: top - i };
     });
     updateManyShapeFields(diagramDoc, updates, localOrigin);
   },

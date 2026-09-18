@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowUpToLine,
+  GripVertical,
   PanelLeftClose,
   PanelLeftOpen,
   Trash2,
@@ -39,6 +40,62 @@ export const LayerTree = () => {
   const [collapsed, setCollapsed] = useState(() => window.innerWidth < 640);
 
   const inZOrder = Object.values(shapes).sort((a, b) => b.zIndex - a.zIndex);
+
+  // free drag-to-reorder, in addition to the front/back buttons below -
+  // pointer events (not native HTML5 drag-and-drop) so this works the same
+  // on touch as it does with a mouse, consistent with how the canvas itself
+  // handles gestures
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLLIElement>());
+  // kept in sync every render so the drag effect (which only re-subscribes
+  // when a drag starts/ends) always sees the current order, without needing
+  // to restart its window listeners on every shapes-map change
+  const orderRef = useRef(inZOrder);
+  orderRef.current = inZOrder;
+
+  useEffect(() => {
+    if (!dragId) return;
+
+    const handleMove = (e: PointerEvent) => {
+      const order = orderRef.current;
+      let index = order.length;
+      for (let i = 0; i < order.length; i++) {
+        const row = rowRefs.current.get(order[i].id);
+        if (!row) continue;
+        const rect = row.getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+          index = i;
+          break;
+        }
+      }
+      setDropIndex(index);
+    };
+
+    const handleUp = () => {
+      setDropIndex((index) => {
+        const order = orderRef.current;
+        const from = order.findIndex((s) => s.id === dragId);
+        if (from !== -1 && index !== null && index !== from) {
+          const ids = order.map((s) => s.id);
+          ids.splice(from, 1);
+          ids.splice(index > from ? index - 1 : index, 0, dragId);
+          const { stopCapturing, reorderShapes } = useCanvasStore.getState();
+          stopCapturing();
+          reorderShapes(ids);
+        }
+        return null;
+      });
+      setDragId(null);
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [dragId]);
 
   const reorder = (id: string, direction: "front" | "back") => {
     const {
@@ -106,16 +163,43 @@ export const LayerTree = () => {
       )}
       {inZOrder.length > 0 && (
         <ul className="flex flex-col gap-1">
-          {inZOrder.map((shape) => (
+          {inZOrder.map((shape, index) => (
             <li
               key={shape.id}
-              className="flex items-center justify-between rounded-md px-1.5 py-1 text-sm"
+              ref={(el) => {
+                if (el) rowRefs.current.set(shape.id, el);
+                else rowRefs.current.delete(shape.id);
+              }}
+              className="flex items-center gap-1 rounded-md px-1 py-1 text-sm"
               style={{
                 background: selectedIds.includes(shape.id)
                   ? "var(--muted)"
                   : undefined,
+                opacity: dragId === shape.id ? 0.4 : undefined,
+                borderTop:
+                  dragId && dropIndex === index
+                    ? "2px solid var(--primary)"
+                    : "2px solid transparent",
+                borderBottom:
+                  dragId &&
+                  dropIndex === inZOrder.length &&
+                  index === inZOrder.length - 1
+                    ? "2px solid var(--primary)"
+                    : "2px solid transparent",
               }}
             >
+              <button
+                type="button"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  setDragId(shape.id);
+                }}
+                aria-label="Drag to reorder"
+                title="Drag to reorder"
+                className="shrink-0 cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+              >
+                <GripVertical className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => useCanvasStore.getState().selectShape(shape.id)}
