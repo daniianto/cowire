@@ -3,7 +3,7 @@ import {
   doBoxesIntersect,
   getBoundingBox,
   getEdgePoint,
-  isPointInArrowHandle,
+  isPointInConnectorHandle,
   isPointInResizeHandle,
   isPointInShape,
   screenToCanvas,
@@ -23,9 +23,14 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 8;
 
 type DragState =
-  | { mode: "creating-box"; id: string; start: Point } // rectangle
+  // "creating-box"/"resizing-box" are reused as-is for triangle/diamond too
+  // (identical x/y/width/height fields and corner-drag math)
+  | { mode: "creating-box"; id: string; start: Point } // rectangle/triangle/diamond
   | { mode: "creating-circle"; id: string; start: Point }
-  | { mode: "creating-arrow"; id: string }
+  | { mode: "creating-ellipse"; id: string; start: Point }
+  // "creating-arrow"/"resizing-arrow" are reused as-is for line too
+  // (identical endpoint/attachment fields, differing only in the arrowhead)
+  | { mode: "creating-arrow"; id: string } // arrow/line
   // `committed` is lazy history-commit tracking: a gesture that never
   // actually moves the pointer shouldn't push a wasted undo step
   | {
@@ -34,7 +39,7 @@ type DragState =
       lastCanvasPoint: Point;
       committed: boolean;
     }
-  | { mode: "resizing-box"; id: string; origin: Point; committed: boolean } // rectangle
+  | { mode: "resizing-box"; id: string; origin: Point; committed: boolean } // rectangle/triangle/diamond
   | {
       mode: "resizing-label";
       id: string;
@@ -44,8 +49,9 @@ type DragState =
       committed: boolean;
     }
   | { mode: "resizing-circle"; id: string; committed: boolean }
+  | { mode: "resizing-ellipse"; id: string; origin: Point; committed: boolean }
   | {
-      mode: "resizing-arrow";
+      mode: "resizing-arrow"; // arrow/line
       id: string;
       endpoint: "start" | "end";
       committed: boolean;
@@ -115,7 +121,8 @@ export const useCanvasInteraction = (
 
     // tool switching also has an on-screen Toolbar (Stage 7, for touch
     // devices with no keyboard) - these shortcuts stay as a faster desktop
-    // path, not a replacement: R/C/A/L pick a shape tool, G/Shift+G
+    // path, not a replacement: R/C/E/T/D/A/N/L pick a shape tool
+    // (rectangle/circle/ellipse/triangle/diamond/arrow/line/label), G/Shift+G
     // group/ungroup, ]/[ bring-to-front/send-to-back, Cmd|Ctrl+Z/Shift+Z
     // undo/redo, Escape goes back to select tool and deselects,
     // Delete/Backspace removes the selection
@@ -162,8 +169,16 @@ export const useCanvasInteraction = (
         setTool("rectangle");
       } else if (e.key === "c" || e.key === "C") {
         setTool("circle");
+      } else if (e.key === "e" || e.key === "E") {
+        setTool("ellipse");
+      } else if (e.key === "t" || e.key === "T") {
+        setTool("triangle");
+      } else if (e.key === "d" || e.key === "D") {
+        setTool("diamond");
       } else if (e.key === "a" || e.key === "A") {
         setTool("arrow");
+      } else if (e.key === "n" || e.key === "N") {
+        setTool("line");
       } else if (e.key === "l" || e.key === "L") {
         setTool("label");
       } else if (e.key === "g" || e.key === "G") {
@@ -254,10 +269,10 @@ export const useCanvasInteraction = (
       const screenPoint = toScreenPoint(e, canvas);
       const canvasPoint = screenToCanvas(screenPoint, viewport);
 
-      if (tool === "rectangle") {
+      if (tool === "rectangle" || tool === "triangle" || tool === "diamond") {
         const shape: NewShape = {
           id: crypto.randomUUID(),
-          type: "rectangle",
+          type: tool,
           x: canvasPoint.x,
           y: canvasPoint.y,
           width: 0,
@@ -295,10 +310,31 @@ export const useCanvasInteraction = (
         return;
       }
 
-      if (tool === "arrow") {
+      if (tool === "ellipse") {
         const shape: NewShape = {
           id: crypto.randomUUID(),
-          type: "arrow",
+          type: "ellipse",
+          x: canvasPoint.x,
+          y: canvasPoint.y,
+          radiusX: 0,
+          radiusY: 0,
+          color: DEFAULT_SHAPE_COLOR,
+        };
+        stopCapturing();
+        addShape(shape);
+        selectShape(shape.id);
+        dragRef.current = {
+          mode: "creating-ellipse",
+          id: shape.id,
+          start: canvasPoint,
+        };
+        return;
+      }
+
+      if (tool === "arrow" || tool === "line") {
+        const shape: NewShape = {
+          id: crypto.randomUUID(),
+          type: tool,
           x1: canvasPoint.x,
           y1: canvasPoint.y,
           x2: canvasPoint.x,
@@ -324,7 +360,9 @@ export const useCanvasInteraction = (
         selectedIds.length === 1 ? shapes[selectedIds[0]] : undefined;
       if (singleSelected) {
         if (
-          singleSelected.type === "rectangle" &&
+          (singleSelected.type === "rectangle" ||
+            singleSelected.type === "triangle" ||
+            singleSelected.type === "diamond") &&
           isPointInResizeHandle(canvasPoint, singleSelected)
         ) {
           dragRef.current = {
@@ -360,9 +398,29 @@ export const useCanvasInteraction = (
           };
           return;
         }
-        if (singleSelected.type === "arrow") {
+        if (
+          singleSelected.type === "ellipse" &&
+          isPointInResizeHandle(canvasPoint, singleSelected)
+        ) {
+          dragRef.current = {
+            mode: "resizing-ellipse",
+            id: singleSelected.id,
+            origin: {
+              x: singleSelected.x - singleSelected.radiusX,
+              y: singleSelected.y - singleSelected.radiusY,
+            },
+            committed: false,
+          };
+          return;
+        }
+        if (singleSelected.type === "arrow" || singleSelected.type === "line") {
           if (
-            isPointInArrowHandle(canvasPoint, singleSelected, "start", shapes)
+            isPointInConnectorHandle(
+              canvasPoint,
+              singleSelected,
+              "start",
+              shapes
+            )
           ) {
             dragRef.current = {
               mode: "resizing-arrow",
@@ -373,7 +431,7 @@ export const useCanvasInteraction = (
             return;
           }
           if (
-            isPointInArrowHandle(canvasPoint, singleSelected, "end", shapes)
+            isPointInConnectorHandle(canvasPoint, singleSelected, "end", shapes)
           ) {
             dragRef.current = {
               mode: "resizing-arrow",
@@ -545,6 +603,22 @@ export const useCanvasInteraction = (
           });
           break;
         }
+        case "creating-ellipse": {
+          // unlike creating-circle, width/height grow independently - the
+          // whole point of an ellipse - so this is the plain corner-anchored
+          // box math rectangle uses, just converted to center+radii after
+          const boxX = Math.min(drag.start.x, canvasPoint.x);
+          const boxY = Math.min(drag.start.y, canvasPoint.y);
+          const width = Math.abs(canvasPoint.x - drag.start.x);
+          const height = Math.abs(canvasPoint.y - drag.start.y);
+          updateShape(drag.id, {
+            x: boxX + width / 2,
+            y: boxY + height / 2,
+            radiusX: width / 2,
+            radiusY: height / 2,
+          });
+          break;
+        }
         case "creating-arrow":
           updateShape(drag.id, { x2: canvasPoint.x, y2: canvasPoint.y });
           break;
@@ -556,6 +630,21 @@ export const useCanvasInteraction = (
           });
           dragRef.current = { ...drag, committed: true };
           break;
+        case "resizing-ellipse": {
+          if (!drag.committed) stopCapturing();
+          const boxX = Math.min(drag.origin.x, canvasPoint.x);
+          const boxY = Math.min(drag.origin.y, canvasPoint.y);
+          const width = Math.abs(canvasPoint.x - drag.origin.x);
+          const height = Math.abs(canvasPoint.y - drag.origin.y);
+          updateShape(drag.id, {
+            x: boxX + width / 2,
+            y: boxY + height / 2,
+            radiusX: width / 2,
+            radiusY: height / 2,
+          });
+          dragRef.current = { ...drag, committed: true };
+          break;
+        }
         case "resizing-label": {
           if (shape.type !== "label") break;
           if (!drag.committed) stopCapturing();
@@ -635,25 +724,30 @@ export const useCanvasInteraction = (
 
       const shape = shapes[drag.id];
 
-      // hit-tests one arrow endpoint's current point against every other
-      // (non-arrow) shape and binds or unbinds it accordingly - called once
-      // a create/resize-endpoint gesture actually finishes, never mid-drag
-      const resolveArrowAttachment = (
+      // hit-tests one connector (arrow/line) endpoint's current point
+      // against every other (non-connector) shape and binds or unbinds it
+      // accordingly - called once a create/resize-endpoint gesture actually
+      // finishes, never mid-drag
+      const resolveConnectorAttachment = (
         id: string,
         endpoint: "start" | "end"
       ) => {
-        const arrow = useCanvasStore.getState().shapes[id];
-        if (arrow?.type !== "arrow") return;
+        const connector = useCanvasStore.getState().shapes[id];
+        if (connector?.type !== "arrow" && connector?.type !== "line") return;
         const point =
           endpoint === "start"
-            ? { x: arrow.x1, y: arrow.y1 }
-            : { x: arrow.x2, y: arrow.y2 };
+            ? { x: connector.x1, y: connector.y1 }
+            : { x: connector.x2, y: connector.y2 };
         const otherPoint =
           endpoint === "start"
-            ? { x: arrow.x2, y: arrow.y2 }
-            : { x: arrow.x1, y: arrow.y1 };
+            ? { x: connector.x2, y: connector.y2 }
+            : { x: connector.x1, y: connector.y1 };
         const target = Object.values(useCanvasStore.getState().shapes).find(
-          (s) => s.id !== id && s.type !== "arrow" && isPointInShape(point, s)
+          (s) =>
+            s.id !== id &&
+            s.type !== "arrow" &&
+            s.type !== "line" &&
+            isPointInShape(point, s)
         );
         if (target) {
           const edge = getEdgePoint(target, otherPoint);
@@ -680,8 +774,8 @@ export const useCanvasInteraction = (
       ) {
         if (!shape) return;
         const box = getBoundingBox(shape);
-        // a click with no drag leaves a 0x0 rectangle — discard it instead
-        // of committing invisible junk
+        // a click with no drag leaves a 0x0 shape — discard it instead of
+        // committing invisible junk
         if (box.width === 0 || box.height === 0) {
           removeShape(drag.id);
           selectShape(null);
@@ -693,25 +787,34 @@ export const useCanvasInteraction = (
           removeShape(drag.id);
           selectShape(null);
         }
+      } else if (drag.mode === "creating-ellipse") {
+        if (
+          shape?.type === "ellipse" &&
+          (shape.radiusX === 0 || shape.radiusY === 0)
+        ) {
+          removeShape(drag.id);
+          selectShape(null);
+        }
       } else if (drag.mode === "creating-arrow") {
         if (
-          shape?.type === "arrow" &&
+          (shape?.type === "arrow" || shape?.type === "line") &&
           shape.x1 === shape.x2 &&
           shape.y1 === shape.y2
         ) {
           removeShape(drag.id);
           selectShape(null);
         } else {
-          resolveArrowAttachment(drag.id, "start");
-          resolveArrowAttachment(drag.id, "end");
+          resolveConnectorAttachment(drag.id, "start");
+          resolveConnectorAttachment(drag.id, "end");
         }
       } else if (drag.mode === "resizing-arrow") {
-        resolveArrowAttachment(drag.id, drag.endpoint);
+        resolveConnectorAttachment(drag.id, drag.endpoint);
       }
 
       if (
         drag.mode === "creating-box" ||
         drag.mode === "creating-circle" ||
+        drag.mode === "creating-ellipse" ||
         drag.mode === "creating-arrow"
       ) {
         setTool("select");

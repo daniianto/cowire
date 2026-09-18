@@ -5,14 +5,18 @@ import {
   doBoxesIntersect,
   isPointInShape,
   isPointInResizeHandle,
-  isPointInArrowHandle,
+  isPointInConnectorHandle,
   screenToCanvas,
   canvasToScreen,
   getContrastTextColor,
-  resolveArrowEndpoints,
+  resolveConnectorEndpoints,
   type RectangleShape,
   type CircleShape,
+  type EllipseShape,
+  type TriangleShape,
+  type DiamondShape,
   type ArrowShape,
+  type LineShape,
   type LabelShape,
   type Shape,
 } from "../src/lib/geometry";
@@ -45,6 +49,60 @@ const circle = (overrides: Partial<CircleShape> = {}): CircleShape => ({
 const arrow = (overrides: Partial<ArrowShape> = {}): ArrowShape => ({
   id: "3",
   type: "arrow",
+  zIndex: 0,
+  groupId: null,
+  x1: 0,
+  y1: 0,
+  x2: 100,
+  y2: 0,
+  color: "#000000",
+  startAttachedToId: null,
+  endAttachedToId: null,
+  ...overrides,
+});
+
+const ellipse = (overrides: Partial<EllipseShape> = {}): EllipseShape => ({
+  id: "5",
+  type: "ellipse",
+  zIndex: 0,
+  groupId: null,
+  x: 50,
+  y: 50,
+  radiusX: 20,
+  radiusY: 10,
+  color: "#000000",
+  ...overrides,
+});
+
+const triangle = (overrides: Partial<TriangleShape> = {}): TriangleShape => ({
+  id: "6",
+  type: "triangle",
+  zIndex: 0,
+  groupId: null,
+  x: 0,
+  y: 0,
+  width: 20,
+  height: 20,
+  color: "#000000",
+  ...overrides,
+});
+
+const diamond = (overrides: Partial<DiamondShape> = {}): DiamondShape => ({
+  id: "7",
+  type: "diamond",
+  zIndex: 0,
+  groupId: null,
+  x: 0,
+  y: 0,
+  width: 20,
+  height: 20,
+  color: "#000000",
+  ...overrides,
+});
+
+const line = (overrides: Partial<LineShape> = {}): LineShape => ({
+  id: "8",
+  type: "line",
   zIndex: 0,
   groupId: null,
   x1: 0,
@@ -112,6 +170,30 @@ describe("getBoundingBox", () => {
       y: 10,
       width: 40,
       height: 16,
+    });
+  });
+
+  it("computes an ellipse's bounding box from its center and independent radii", () => {
+    expect(
+      getBoundingBox(ellipse({ x: 50, y: 50, radiusX: 20, radiusY: 10 }))
+    ).toEqual({ x: 30, y: 40, width: 40, height: 20 });
+  });
+
+  it("treats a triangle/diamond like a rectangle", () => {
+    expect(
+      getBoundingBox(triangle({ x: 0, y: 0, width: 20, height: 20 }))
+    ).toEqual({ x: 0, y: 0, width: 20, height: 20 });
+    expect(
+      getBoundingBox(diamond({ x: 0, y: 0, width: 20, height: 20 }))
+    ).toEqual({ x: 0, y: 0, width: 20, height: 20 });
+  });
+
+  it("normalizes a line's endpoints like an arrow", () => {
+    expect(getBoundingBox(line({ x1: 100, y1: 50, x2: 0, y2: 0 }))).toEqual({
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 50,
     });
   });
 });
@@ -198,6 +280,32 @@ describe("isPointInShape", () => {
     // are thin, so a bounding-box hit test would wrongly count this
     expect(isPointInShape({ x: 50, y: 50 }, a)).toBe(false);
   });
+
+  it("hit-tests a line the same way as an arrow", () => {
+    const l = line({ x1: 0, y1: 0, x2: 100, y2: 0 });
+    expect(isPointInShape({ x: 50, y: 0 }, l)).toBe(true);
+    expect(isPointInShape({ x: 50, y: 50 }, l)).toBe(false);
+  });
+
+  it("hit-tests an ellipse by the ellipse equation, not its bounding box", () => {
+    const e = ellipse({ x: 50, y: 50, radiusX: 20, radiusY: 10 });
+    expect(isPointInShape({ x: 50, y: 50 }, e)).toBe(true); // center
+    expect(isPointInShape({ x: 50, y: 59 }, e)).toBe(true); // inside vertical radius
+    // corner of the bounding box is outside the actual ellipse
+    expect(isPointInShape({ x: 31, y: 41 }, e)).toBe(false);
+  });
+
+  it("hit-tests a triangle within its inscribed outline, not its full bounding box", () => {
+    const t = triangle({ x: 0, y: 0, width: 20, height: 20 });
+    expect(isPointInShape({ x: 10, y: 18 }, t)).toBe(true); // near the base, inside
+    expect(isPointInShape({ x: 1, y: 1 }, t)).toBe(false); // top-left corner of the box, outside the triangle
+  });
+
+  it("hit-tests a diamond within its inscribed outline, not its full bounding box", () => {
+    const d = diamond({ x: 0, y: 0, width: 20, height: 20 });
+    expect(isPointInShape({ x: 10, y: 10 }, d)).toBe(true); // center
+    expect(isPointInShape({ x: 1, y: 1 }, d)).toBe(false); // corner of the box, outside the diamond
+  });
 });
 
 describe("isPointInResizeHandle", () => {
@@ -211,17 +319,17 @@ describe("isPointInResizeHandle", () => {
   });
 });
 
-describe("isPointInArrowHandle", () => {
+describe("isPointInConnectorHandle", () => {
   const a = arrow({ x1: 0, y1: 0, x2: 100, y2: 0 });
 
   it("hit-tests the start endpoint handle", () => {
-    expect(isPointInArrowHandle({ x: 0, y: 0 }, a, "start")).toBe(true);
-    expect(isPointInArrowHandle({ x: 100, y: 0 }, a, "start")).toBe(false);
+    expect(isPointInConnectorHandle({ x: 0, y: 0 }, a, "start")).toBe(true);
+    expect(isPointInConnectorHandle({ x: 100, y: 0 }, a, "start")).toBe(false);
   });
 
   it("hit-tests the end endpoint handle", () => {
-    expect(isPointInArrowHandle({ x: 100, y: 0 }, a, "end")).toBe(true);
-    expect(isPointInArrowHandle({ x: 0, y: 0 }, a, "end")).toBe(false);
+    expect(isPointInConnectorHandle({ x: 100, y: 0 }, a, "end")).toBe(true);
+    expect(isPointInConnectorHandle({ x: 0, y: 0 }, a, "end")).toBe(false);
   });
 });
 
@@ -264,10 +372,10 @@ describe("getContrastTextColor", () => {
   });
 });
 
-describe("resolveArrowEndpoints", () => {
+describe("resolveConnectorEndpoints", () => {
   it("returns an unattached arrow's raw coordinates unchanged", () => {
     const shape = arrow({ x1: 0, y1: 0, x2: 100, y2: 0 });
-    expect(resolveArrowEndpoints(shape, { [shape.id]: shape })).toEqual({
+    expect(resolveConnectorEndpoints(shape, { [shape.id]: shape })).toEqual({
       x1: 0,
       y1: 0,
       x2: 100,
@@ -285,7 +393,7 @@ describe("resolveArrowEndpoints", () => {
       endAttachedToId: "target",
     });
     const shapes: Record<string, Shape> = { [shape.id]: shape, target };
-    const resolved = resolveArrowEndpoints(shape, shapes);
+    const resolved = resolveConnectorEndpoints(shape, shapes);
     // target's box is x:[200,220] y:[90,110], centered at (210,100) -
     // approaching from (0,100) (straight left) should land on its left edge
     expect(resolved.x2).toBeCloseTo(200);
@@ -302,7 +410,7 @@ describe("resolveArrowEndpoints", () => {
       endAttachedToId: "target",
     });
     const shapes: Record<string, Shape> = { [shape.id]: shape, target };
-    const resolved = resolveArrowEndpoints(shape, shapes);
+    const resolved = resolveConnectorEndpoints(shape, shapes);
     // approaching from directly left, the edge point is radius away on that side
     expect(resolved.x2).toBeCloseTo(190);
     expect(resolved.y2).toBeCloseTo(100);
@@ -316,7 +424,7 @@ describe("resolveArrowEndpoints", () => {
       y2: 7,
       endAttachedToId: "deleted-shape",
     });
-    expect(resolveArrowEndpoints(shape, { [shape.id]: shape })).toEqual({
+    expect(resolveConnectorEndpoints(shape, { [shape.id]: shape })).toEqual({
       x1: 0,
       y1: 0,
       x2: 42,

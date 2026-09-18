@@ -6,13 +6,19 @@ import type { Shape } from "@/lib/geometry";
 const TYPE_NAMES: Record<Shape["type"], string> = {
   rectangle: "Rectangle",
   circle: "Circle",
+  ellipse: "Ellipse",
+  triangle: "Triangle",
+  diamond: "Diamond",
   arrow: "Arrow",
+  line: "Line",
   label: "Label",
 };
 
 const displayName = (shape: Shape): string => {
   if (shape.type === "label") return shape.text || "Label";
-  if (shape.type !== "arrow" && shape.label) return shape.label;
+  if (shape.type !== "arrow" && shape.type !== "line" && shape.label) {
+    return shape.label;
+  }
   return TYPE_NAMES[shape.type];
 };
 

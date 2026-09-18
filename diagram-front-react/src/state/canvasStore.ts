@@ -16,7 +16,16 @@ import {
 } from "diagram-crdt-core";
 import type { BoundingBox, NewShape, Shape, Viewport } from "@/lib/geometry";
 
-export type Tool = "select" | "rectangle" | "circle" | "arrow" | "label";
+export type Tool =
+  | "select"
+  | "rectangle"
+  | "circle"
+  | "ellipse"
+  | "triangle"
+  | "diamond"
+  | "arrow"
+  | "line"
+  | "label";
 
 // the collaborative source of truth for shapes - `shapes` in the store below
 // is a materialized read cache kept in sync by the observer at the bottom of

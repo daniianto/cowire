@@ -1,6 +1,6 @@
 import {
-  getArrowHandleBounds,
   getBoundingBox,
+  getConnectorHandleBounds,
   getGroupBoundingBox,
   getResizeHandleBounds,
   type BoundingBox,
@@ -34,24 +34,38 @@ export const renderSelectionBox = (
   shape: Shape,
   allShapes: Record<string, Shape>
 ): void => {
-  if (shape.type === "circle") {
+  if (shape.type === "circle" || shape.type === "ellipse") {
     ctx.save();
     ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
-    ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
+    if (shape.type === "circle") {
+      ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
+    } else {
+      ctx.ellipse(
+        shape.x,
+        shape.y,
+        Math.abs(shape.radiusX),
+        Math.abs(shape.radiusY),
+        0,
+        0,
+        Math.PI * 2
+      );
+    }
     ctx.stroke();
     ctx.restore();
   } else {
+    // triangle/diamond use their bounding box as an outline approximation,
+    // same as their resize handle already does
     strokeDashedBox(ctx, getBoundingBox(shape, allShapes));
   }
 
-  // arrows resize from either endpoint; everything else resizes from one
-  // bottom-right corner handle
-  if (shape.type === "arrow") {
-    drawHandle(ctx, getArrowHandleBounds(shape, "start", allShapes));
-    drawHandle(ctx, getArrowHandleBounds(shape, "end", allShapes));
+  // connectors (arrow/line) resize from either endpoint; everything else
+  // resizes from one bottom-right corner handle
+  if (shape.type === "arrow" || shape.type === "line") {
+    drawHandle(ctx, getConnectorHandleBounds(shape, "start", allShapes));
+    drawHandle(ctx, getConnectorHandleBounds(shape, "end", allShapes));
   } else {
     drawHandle(ctx, getResizeHandleBounds(shape));
   }
