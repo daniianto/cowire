@@ -24,7 +24,7 @@ export const Inspector = () => {
     // drawing a new shape near wherever the panel is currently positioned
     <div
       className="pointer-events-none flex flex-col gap-2 rounded-lg border bg-background p-2 shadow-sm"
-      style={{ position: "absolute", top: 8, left: 8 }}
+      style={{ position: "absolute", top: 48, right: 8 }}
     >
       <div className="flex items-center gap-2">
         <Label htmlFor="shape-color" className="pointer-events-none text-xs">

@@ -120,6 +120,20 @@ export const useCanvasInteraction = (
     // undo/redo, Escape goes back to select tool and deselects,
     // Delete/Backspace removes the selection
     const handleKeyDown = (e: KeyboardEvent) => {
+      // this listener is on `window`, not scoped to the canvas, so without
+      // this guard every canvas shortcut (Backspace/Delete included) also
+      // fires while typing into an unrelated text field - e.g. correcting a
+      // typo in the Inspector's label input would delete the selected shape
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
       const {
         selectedIds,
         removeShapes,

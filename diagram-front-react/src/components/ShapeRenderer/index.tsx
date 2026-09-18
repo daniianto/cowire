@@ -59,14 +59,17 @@ export const renderShape = (
       const { x1, y1, x2, y2 } = resolveArrowEndpoints(shape, shapes);
       drawArrow(ctx, x1, y1, x2, y2, shape.color);
       if (shape.label) {
-        // no fill behind an arrow's label to contrast against, so it always
-        // uses a fixed dark color rather than getContrastTextColor
+        // an arrow's label sits over whatever's on the canvas behind it
+        // (unlike a rectangle/circle label, which already has the shape's
+        // own fill for contrast) - a background pill keeps it readable
+        // regardless, always paired with a fixed dark text color
         drawCenteredLabel(
           ctx,
           shape.label,
           (x1 + x2) / 2,
           (y1 + y2) / 2,
-          "#0f172a"
+          "#0f172a",
+          "#f8fafc"
         );
       }
       break;
@@ -74,18 +77,35 @@ export const renderShape = (
   }
 };
 
+const LABEL_FONT_SIZE = 13;
+const LABEL_BACKGROUND_PADDING_X = 6;
+const LABEL_BACKGROUND_PADDING_Y = 3;
+
 const drawCenteredLabel = (
   ctx: CanvasRenderingContext2D,
   text: string,
   centerX: number,
   centerY: number,
-  textColor: string
+  textColor: string,
+  backgroundColor?: string
 ): void => {
   ctx.save();
-  ctx.fillStyle = textColor;
-  ctx.font = "13px system-ui, sans-serif";
+  ctx.font = `${LABEL_FONT_SIZE}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+
+  if (backgroundColor) {
+    const { width } = ctx.measureText(text);
+    ctx.fillStyle = backgroundColor;
+    ctx.fillRect(
+      centerX - width / 2 - LABEL_BACKGROUND_PADDING_X,
+      centerY - LABEL_FONT_SIZE / 2 - LABEL_BACKGROUND_PADDING_Y,
+      width + LABEL_BACKGROUND_PADDING_X * 2,
+      LABEL_FONT_SIZE + LABEL_BACKGROUND_PADDING_Y * 2
+    );
+  }
+
+  ctx.fillStyle = textColor;
   ctx.fillText(text, centerX, centerY);
   ctx.restore();
 };

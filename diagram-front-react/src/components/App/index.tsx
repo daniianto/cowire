@@ -53,39 +53,44 @@ export const App = () => {
   }
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      <Canvas />
-      <RemoteCursors peers={peers} />
-      <Inspector />
-      <div
-        style={{
-          position: "absolute",
-          bottom: 8,
-          left: "50%",
-          transform: "translateX(-50%)",
-        }}
-      >
-        <Toolbar />
-      </div>
-      <div
-        className="flex items-center gap-2"
-        style={{ position: "absolute", top: 8, right: 8 }}
-      >
-        <PresenceIndicator users={peers} />
-        <SaveDialog
-          currentDiagramId={currentDiagramId}
-          onSaved={setCurrentDiagramId}
-        />
-        <DiagramList onSelect={setCurrentDiagramId} />
-        <LayerTree />
-        {currentDiagramId && (
-          <Button variant="outline" size="sm" onClick={handleCopyLink}>
-            Copy Link
+    // LayerTree is a real flex sibling, not an overlay - it needs actual
+    // layout space so the canvas is laid out narrower than the viewport
+    // rather than merely painted under it (see LayerTree for why)
+    <div style={{ display: "flex", width: "100%", height: "100%" }}>
+      <LayerTree />
+      <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+        <Canvas />
+        <RemoteCursors peers={peers} />
+        <Inspector />
+        <div
+          style={{
+            position: "absolute",
+            bottom: 8,
+            left: "50%",
+            transform: "translateX(-50%)",
+          }}
+        >
+          <Toolbar />
+        </div>
+        <div
+          className="flex items-center gap-2"
+          style={{ position: "absolute", top: 8, right: 8 }}
+        >
+          <PresenceIndicator users={peers} />
+          <SaveDialog
+            currentDiagramId={currentDiagramId}
+            onSaved={setCurrentDiagramId}
+          />
+          <DiagramList onSelect={setCurrentDiagramId} />
+          {currentDiagramId && (
+            <Button variant="outline" size="sm" onClick={handleCopyLink}>
+              Copy Link
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => signOut()}>
+            Sign out
           </Button>
-        )}
-        <Button variant="outline" size="sm" onClick={() => signOut()}>
-          Sign out
-        </Button>
+        </div>
       </div>
     </div>
   );
