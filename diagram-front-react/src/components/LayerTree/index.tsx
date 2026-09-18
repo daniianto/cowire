@@ -30,6 +30,9 @@ const displayName = (shape: Shape): string => {
   return TYPE_NAMES[shape.type];
 };
 
+const MIN_WIDTH = 120;
+const DEFAULT_WIDTH = 176;
+
 // a persistent side panel rather than a Dialog - revisited from STAGE_8.md's
 // original decision at the user's request
 export const LayerTree = () => {
@@ -38,6 +41,34 @@ export const LayerTree = () => {
   // collapsed to a slim rail by default on narrow viewports so it doesn't
   // eat into the canvas on mobile; the user can still expand it there
   const [collapsed, setCollapsed] = useState(() => window.innerWidth < 640);
+  const [width, setWidth] = useState(() =>
+    window.innerWidth < 640 ? MIN_WIDTH : DEFAULT_WIDTH
+  );
+  const [resizing, setResizing] = useState(false);
+  const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(
+    null
+  );
+
+  useEffect(() => {
+    if (!resizing) return;
+
+    const handleMove = (e: PointerEvent) => {
+      const start = resizeStartRef.current;
+      if (!start) return;
+      const maxWidth = window.innerWidth * 0.6;
+      const next = start.startWidth + (e.clientX - start.startX);
+      setWidth(Math.min(maxWidth, Math.max(MIN_WIDTH, next)));
+    };
+
+    const handleUp = () => setResizing(false);
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [resizing]);
 
   const inZOrder = Object.values(shapes).sort((a, b) => b.zIndex - a.zIndex);
 
@@ -144,7 +175,28 @@ export const LayerTree = () => {
     // painted under this panel - otherwise this panel's own hit area (a
     // real scrollable list, unlike Inspector's few small controls) would
     // block canvas drags/clicks anywhere under its footprint
-    <div className="flex h-full w-32 shrink-0 flex-col gap-2 overflow-y-auto border-r bg-background p-2 shadow-sm sm:w-44">
+    <div
+      className="relative flex h-full shrink-0 flex-col gap-2 overflow-y-auto border-r bg-background p-2 shadow-sm"
+      style={{ width }}
+    >
+      {/* drag handle on the panel's right edge to resize it - pointer
+          events again, not native HTML5 drag-and-drop, for touch support */}
+      <div
+        onPointerDown={(e) => {
+          e.preventDefault();
+          resizeStartRef.current = { startX: e.clientX, startWidth: width };
+          setResizing(true);
+        }}
+        className="absolute top-0 z-10 h-full w-2 cursor-col-resize touch-none hover:bg-primary/40"
+        // right:-1 (not the `right-0` utility) so the handle's hit area
+        // actually reaches the panel's visible border instead of stopping
+        // 1px short of it (right:0 anchors to the padding edge, inside the
+        // 1px `border-r`) - otherwise a click right on the border misses it
+        style={{
+          right: -1,
+          background: resizing ? "var(--primary)" : undefined,
+        }}
+      />
       <div className="flex items-center justify-between px-1">
         <h2 className="text-xs font-medium text-muted-foreground">Layers</h2>
         <Button
