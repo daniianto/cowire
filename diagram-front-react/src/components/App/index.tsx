@@ -69,7 +69,10 @@ export const App = () => {
         style={{ position: "absolute", top: 8, right: 8 }}
       >
         <PresenceIndicator users={peers} />
-        <SaveDialog onSaved={setCurrentDiagramId} />
+        <SaveDialog
+          currentDiagramId={currentDiagramId}
+          onSaved={setCurrentDiagramId}
+        />
         <DiagramList onSelect={setCurrentDiagramId} />
         {currentDiagramId && (
           <Button variant="outline" size="sm" onClick={handleCopyLink}>

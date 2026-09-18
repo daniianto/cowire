@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import {
   listDiagrams,
   saveDiagram,
+  updateDiagram,
   loadDiagram as loadDiagramRequest,
   type DiagramSummary,
 } from "diagram-supabase-wrapper";
@@ -55,6 +56,23 @@ export const useDiagrams = () => {
     [client, session]
   );
 
+  // re-saves over an already-saved diagram in place, unlike save() which
+  // always inserts a new row - see STAGE_8.md's "Save vs Save As" decision
+  const update = useCallback(
+    async (id: string): Promise<void> => {
+      const { viewport } = useCanvasStore.getState();
+      const data: DiagramData = { viewport };
+      const crdtState = getSnapshot(diagramDoc);
+      try {
+        await updateDiagram(client, id, data, crdtState);
+        toast.success("Saved");
+      } catch {
+        toast.error("Failed to save diagram");
+      }
+    },
+    [client]
+  );
+
   const load = useCallback(
     async (id: string): Promise<void> => {
       try {
@@ -77,5 +95,5 @@ export const useDiagrams = () => {
     [client]
   );
 
-  return { list, save, load };
+  return { list, save, update, load };
 };

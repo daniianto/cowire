@@ -13,16 +13,26 @@ import { Label } from "@/components/ui/label";
 import { useDiagrams } from "@/hooks/useDiagrams";
 
 type SaveDialogProps = {
+  // when set, "Save" overwrites this diagram in place instead of opening
+  // the name dialog - see STAGE_8.md's "Save vs Save As" decision
+  currentDiagramId: string | null;
   // lets the caller (App) make this the active diagram right after saving,
   // e.g. so a "Copy Link" button has something to share immediately
   onSaved?: (id: string) => void;
 };
 
-export const SaveDialog = ({ onSaved }: SaveDialogProps) => {
-  const { save } = useDiagrams();
+export const SaveDialog = ({ currentDiagramId, onSaved }: SaveDialogProps) => {
+  const { save, update } = useDiagrams();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const handleSaveInPlace = async () => {
+    if (!currentDiagramId) return;
+    setSaving(true);
+    await update(currentDiagramId);
+    setSaving(false);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -37,34 +47,48 @@ export const SaveDialog = ({ onSaved }: SaveDialogProps) => {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+    <div className="flex gap-2">
+      {currentDiagramId && (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={saving}
+          onClick={handleSaveInPlace}
+        >
           Save
         </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <DialogHeader>
-            <DialogTitle>Save diagram</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="diagram-name">Name</Label>
-            <Input
-              id="diagram-name"
-              required
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={saving}>
-              Save
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+      )}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            {currentDiagramId ? "Save As" : "Save"}
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <DialogHeader>
+              <DialogTitle>
+                {currentDiagramId ? "Save as new diagram" : "Save diagram"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="diagram-name">Name</Label>
+              <Input
+                id="diagram-name"
+                required
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={saving}>
+                Save
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
