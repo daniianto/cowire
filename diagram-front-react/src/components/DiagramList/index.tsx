@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FolderOpen } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,8 +37,14 @@ export const DiagramList = ({ onSelect }: DiagramListProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          My Diagrams
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="My Diagrams"
+          title="My Diagrams"
+        >
+          <FolderOpen />
         </Button>
       </DialogTrigger>
       <DialogContent>

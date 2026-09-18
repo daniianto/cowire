@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Link2, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useDiagrams } from "@/hooks/useDiagrams";
 import { useDiagramRealtime } from "@/hooks/useDiagramRealtime";
@@ -73,23 +74,47 @@ export const App = () => {
           <Toolbar />
         </div>
         <div
-          className="flex items-center gap-2"
-          style={{ position: "absolute", top: 8, right: 8 }}
+          className="flex flex-wrap items-center justify-end gap-2"
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            maxWidth: "calc(100vw - 16px)",
+          }}
         >
           <PresenceIndicator users={peers} />
-          <SaveDialog
-            currentDiagramId={currentDiagramId}
-            onSaved={setCurrentDiagramId}
-          />
-          <DiagramList onSelect={setCurrentDiagramId} />
-          {currentDiagramId && (
-            <Button variant="outline" size="sm" onClick={handleCopyLink}>
-              Copy Link
+          {/* icon buttons (not text) so this bar stays compact and wraps
+              cleanly instead of overflowing off-screen on mobile widths -
+              same rationale as the on-screen Toolbar's icon buttons */}
+          <div className="flex flex-wrap items-center justify-end gap-1 rounded-lg border bg-background p-1 shadow-sm">
+            <SaveDialog
+              currentDiagramId={currentDiagramId}
+              onSaved={setCurrentDiagramId}
+            />
+            <DiagramList onSelect={setCurrentDiagramId} />
+            {currentDiagramId && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Copy Link"
+                title="Copy Link"
+                onClick={handleCopyLink}
+              >
+                <Link2 />
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Sign out"
+              title="Sign out"
+              onClick={() => signOut()}
+            >
+              <LogOut />
             </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => signOut()}>
-            Sign out
-          </Button>
+          </div>
         </div>
       </div>
     </div>

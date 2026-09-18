@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Save, SaveAll } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -47,21 +48,30 @@ export const SaveDialog = ({ currentDiagramId, onSaved }: SaveDialogProps) => {
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-1">
       {currentDiagramId && (
         <Button
+          type="button"
           variant="outline"
-          size="sm"
+          size="icon"
+          aria-label="Save"
+          title="Save"
           disabled={saving}
           onClick={handleSaveInPlace}
         >
-          Save
+          <Save />
         </Button>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm">
-            {currentDiagramId ? "Save As" : "Save"}
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label={currentDiagramId ? "Save As" : "Save"}
+            title={currentDiagramId ? "Save As" : "Save"}
+          >
+            {currentDiagramId ? <SaveAll /> : <Save />}
           </Button>
         </DialogTrigger>
         <DialogContent>

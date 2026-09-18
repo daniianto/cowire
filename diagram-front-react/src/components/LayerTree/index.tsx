@@ -1,4 +1,11 @@
-import { ArrowDownToLine, ArrowUpToLine } from "lucide-react";
+import { useState } from "react";
+import {
+  ArrowDownToLine,
+  ArrowUpToLine,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCanvasStore } from "@/state";
 import type { Shape } from "@/lib/geometry";
@@ -27,6 +34,9 @@ const displayName = (shape: Shape): string => {
 export const LayerTree = () => {
   const shapes = useCanvasStore((s) => s.shapes);
   const selectedIds = useCanvasStore((s) => s.selectedIds);
+  // collapsed to a slim rail by default on narrow viewports so it doesn't
+  // eat into the canvas on mobile; the user can still expand it there
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth < 640);
 
   const inZOrder = Object.values(shapes).sort((a, b) => b.zIndex - a.zIndex);
 
@@ -43,6 +53,34 @@ export const LayerTree = () => {
     else sendSelectedToBack();
   };
 
+  // deletes the shape's whole group as one step, same as pressing
+  // Delete/Backspace with it selected - selectShape already expands a
+  // grouped id to every member, so removeShapes sees the full group
+  const handleDelete = (id: string) => {
+    const { selectShape, stopCapturing, removeShapes } =
+      useCanvasStore.getState();
+    selectShape(id);
+    stopCapturing();
+    removeShapes(useCanvasStore.getState().selectedIds);
+  };
+
+  if (collapsed) {
+    return (
+      <div className="flex h-full w-8 shrink-0 flex-col items-center border-r bg-background p-1 shadow-sm">
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Show layers"
+          title="Show layers"
+          onClick={() => setCollapsed(false)}
+        >
+          <PanelLeftOpen />
+        </Button>
+      </div>
+    );
+  }
+
   return (
     // a real flex sibling (not a position:absolute overlay) so the canvas
     // is actually laid out narrower than the viewport, rather than merely
@@ -50,7 +88,19 @@ export const LayerTree = () => {
     // real scrollable list, unlike Inspector's few small controls) would
     // block canvas drags/clicks anywhere under its footprint
     <div className="flex h-full w-32 shrink-0 flex-col gap-2 overflow-y-auto border-r bg-background p-2 shadow-sm sm:w-44">
-      <h2 className="px-1 text-xs font-medium text-muted-foreground">Layers</h2>
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-xs font-medium text-muted-foreground">Layers</h2>
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Hide layers"
+          title="Hide layers"
+          onClick={() => setCollapsed(true)}
+        >
+          <PanelLeftClose />
+        </Button>
+      </div>
       {inZOrder.length === 0 && (
         <p className="px-1 text-sm text-muted-foreground">No shapes yet.</p>
       )}
@@ -97,6 +147,16 @@ export const LayerTree = () => {
                   onClick={() => reorder(shape.id, "back")}
                 >
                   <ArrowDownToLine />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Delete"
+                  title="Delete"
+                  onClick={() => handleDelete(shape.id)}
+                >
+                  <Trash2 />
                 </Button>
               </div>
             </li>
