@@ -1,9 +1,12 @@
 import {
+  diamondVertices,
   getBoundingBox,
   getConnectorHandleBounds,
   getGroupBoundingBox,
   getResizeHandleBounds,
+  triangleVertices,
   type BoundingBox,
+  type Point,
   type Shape,
 } from "@/lib/geometry";
 
@@ -25,6 +28,22 @@ const strokeDashedBox = (
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 4]);
   ctx.strokeRect(box.x, box.y, box.width, box.height);
+  ctx.restore();
+};
+
+const strokeDashedPolygon = (
+  ctx: CanvasRenderingContext2D,
+  vertices: readonly Point[]
+): void => {
+  ctx.save();
+  ctx.strokeStyle = SELECTION_COLOR;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(vertices[0].x, vertices[0].y);
+  for (const v of vertices.slice(1)) ctx.lineTo(v.x, v.y);
+  ctx.closePath();
+  ctx.stroke();
   ctx.restore();
 };
 
@@ -55,9 +74,16 @@ export const renderSelectionBox = (
     }
     ctx.stroke();
     ctx.restore();
+  } else if (shape.type === "triangle" || shape.type === "diamond") {
+    // the real inscribed-polygon outline, not the bounding box - the
+    // resize handle still stays at the box's corner regardless (see
+    // getResizeHandleBounds)
+    const box = getBoundingBox(shape, allShapes);
+    strokeDashedPolygon(
+      ctx,
+      shape.type === "triangle" ? triangleVertices(box) : diamondVertices(box)
+    );
   } else {
-    // triangle/diamond use their bounding box as an outline approximation,
-    // same as their resize handle already does
     strokeDashedBox(ctx, getBoundingBox(shape, allShapes));
   }
 

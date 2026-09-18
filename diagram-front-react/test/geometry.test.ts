@@ -9,6 +9,7 @@ import {
   screenToCanvas,
   canvasToScreen,
   getContrastTextColor,
+  getEdgePoint,
   resolveConnectorEndpoints,
   type RectangleShape,
   type CircleShape,
@@ -430,5 +431,40 @@ describe("resolveConnectorEndpoints", () => {
       x2: 42,
       y2: 7,
     });
+  });
+
+  it("resolves an endpoint attached to a triangle onto its true slanted edge, not the box", () => {
+    const target = triangle({
+      id: "target",
+      x: 0,
+      y: 0,
+      width: 20,
+      height: 20,
+    });
+    const shape = arrow({
+      x1: -100,
+      y1: 10,
+      x2: 999,
+      y2: 999,
+      endAttachedToId: "target",
+    });
+    const shapes: Record<string, Shape> = { [shape.id]: shape, target };
+    const resolved = resolveConnectorEndpoints(shape, shapes);
+    // approaching from directly left at the triangle's mid-height: its
+    // bounding box's left edge sits at x=0, but the triangle's own slanted
+    // edge at that height is at x=5 - a box approximation would wrongly land
+    // on (0, 10) instead
+    expect(resolved.x2).toBeCloseTo(5);
+    expect(resolved.y2).toBeCloseTo(10);
+  });
+});
+
+describe("getEdgePoint", () => {
+  it("uses a diamond's true slanted edge for a non-cardinal direction, not its bounding box", () => {
+    const shape = diamond({ x: 0, y: 0, width: 20, height: 20 });
+    const point = getEdgePoint(shape, { x: -100, y: -40 });
+    // a bounding-box ray intersection would land on (0, ~5.45) instead
+    expect(point.x).toBeCloseTo(3.125);
+    expect(point.y).toBeCloseTo(6.875);
   });
 });

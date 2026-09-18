@@ -219,9 +219,11 @@ const centerOf = (shape: Shape): Point => {
  * target shape's edge rather than floating at its center or drifting
  * inside it.
  *
- * Triangle/diamond use their bounding box's edge as an approximation
- * (not their true outline) - close enough for a naive implementation,
- * and consistent with how their resize handle already works the same way.
+ * Triangle/diamond use their true inscribed-polygon outline (via
+ * rayPolygonIntersection), not their bounding box - consistent with how
+ * they're already hit-tested (isPointInTriangle/isPointInDiamond). Their
+ * resize handle still stays at the box's corner regardless - see
+ * getResizeHandleBounds.
  */
 export const getEdgePoint = (shape: Shape, towards: Point): Point => {
   if (shape.type === "circle") {
@@ -241,8 +243,15 @@ export const getEdgePoint = (shape: Shape, towards: Point): Point => {
     const t = 1 / (Math.hypot(dx / rx, dy / ry) || 1);
     return { x: shape.x + dx * t, y: shape.y + dy * t };
   }
-  // rectangle/label/triangle/diamond (and a connector, though connectors are
-  // never a valid attachment target): ray-box intersection from the box's center
+  if (shape.type === "triangle" || shape.type === "diamond") {
+    const box = getBoundingBox(shape);
+    const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const vertices =
+      shape.type === "triangle" ? triangleVertices(box) : diamondVertices(box);
+    return rayPolygonIntersection(center, towards, vertices);
+  }
+  // rectangle/label (and a connector, though connectors are never a valid
+  // attachment target): ray-box intersection from the box's center
   const box = getBoundingBox(shape);
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
@@ -329,11 +338,76 @@ const distanceToSegment = (point: Point, a: Point, b: Point): number => {
 const CONNECTOR_HIT_THRESHOLD = 6;
 
 /** The three corners of a triangle inscribed in a bounding box, apex-up. */
-const triangleVertices = (box: BoundingBox): [Point, Point, Point] => [
+export const triangleVertices = (box: BoundingBox): [Point, Point, Point] => [
   { x: box.x + box.width / 2, y: box.y },
   { x: box.x + box.width, y: box.y + box.height },
   { x: box.x, y: box.y + box.height },
 ];
+
+/** The four corners of a diamond (rhombus) inscribed in a bounding box, in perimeter order. */
+export const diamondVertices = (
+  box: BoundingBox
+): [Point, Point, Point, Point] => {
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  return [
+    { x: cx, y: box.y }, // top
+    { x: box.x + box.width, y: cy }, // right
+    { x: cx, y: box.y + box.height }, // bottom
+    { x: box.x, y: cy }, // left
+  ];
+};
+
+const cross = (v: Point, w: Point): number => v.x * w.y - v.y * w.x;
+
+/**
+ * Intersects the ray `origin + t*dir` (t >= 0) with the segment a–b.
+ * Returns the hit point and its ray parameter `t`, or null if they don't
+ * cross within the segment's bounds - see https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+ * for the cross-product formula this implements.
+ */
+const raySegmentIntersection = (
+  origin: Point,
+  dir: Point,
+  a: Point,
+  b: Point
+): { point: Point; t: number } | null => {
+  const s = { x: b.x - a.x, y: b.y - a.y };
+  const rXs = cross(dir, s);
+  if (rXs === 0) return null; // parallel (or a/b coincide)
+  const qp = { x: a.x - origin.x, y: a.y - origin.y };
+  const t = cross(qp, s) / rXs;
+  const u = cross(qp, dir) / rXs;
+  if (t < 0 || u < 0 || u > 1) return null;
+  return { point: { x: origin.x + dir.x * t, y: origin.y + dir.y * t }, t };
+};
+
+/**
+ * Point where the ray from `center` towards `towards` exits a convex
+ * polygon - i.e. the polygon's true edge facing that direction, used for
+ * a connector endpoint attached to a triangle/diamond (see getEdgePoint).
+ * A ray from a point strictly inside a convex polygon crosses its boundary
+ * exactly once going forward, so this just returns the closest forward hit.
+ */
+const rayPolygonIntersection = (
+  center: Point,
+  towards: Point,
+  vertices: readonly Point[]
+): Point => {
+  const dir = { x: towards.x - center.x, y: towards.y - center.y };
+  if (dir.x === 0 && dir.y === 0) return center;
+  let closest: { point: Point; t: number } | null = null;
+  for (let i = 0; i < vertices.length; i++) {
+    const hit = raySegmentIntersection(
+      center,
+      dir,
+      vertices[i],
+      vertices[(i + 1) % vertices.length]
+    );
+    if (hit && (!closest || hit.t < closest.t)) closest = hit;
+  }
+  return closest ? closest.point : center;
+};
 
 const sign = (p1: Point, p2: Point, p3: Point): number =>
   (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
