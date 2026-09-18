@@ -21,13 +21,6 @@ const LABEL_PADDING = 8;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 8;
 
-// shown via the canvas element's native `title` attribute while hovering a
-// shape - a real OS tooltip (like the Toolbar buttons already use) rather
-// than a custom-positioned overlay, so it's never a contrast/z-index/
-// off-screen-clipping problem
-const SHAPE_HOVER_HINT =
-  "Drag to move · Shift+click to multi-select · G to group · Delete to remove";
-
 type DragState =
   | { mode: "creating-box"; id: string; start: Point } // rectangle
   | { mode: "creating-circle"; id: string; start: Point }
@@ -114,10 +107,6 @@ export const useCanvasInteraction = (
   const pinchStateRef = useRef<{ distance: number; midpoint: Point } | null>(
     null
   );
-  // last shape id the native tooltip was set for - avoids rewriting
-  // canvas.title on every pointermove, which would keep resetting the
-  // browser's own hover-to-show delay
-  const hoveredShapeIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -237,10 +226,6 @@ export const useCanvasInteraction = (
       }
 
       canvas.setPointerCapture(e.pointerId);
-      // a real gesture is starting - drop the hover tooltip rather than let
-      // it sit stale over wherever the pointer was before the drag began
-      hoveredShapeIdRef.current = null;
-      canvas.title = "";
       const {
         shapes,
         selectedIds,
@@ -457,18 +442,7 @@ export const useCanvasInteraction = (
       }
 
       const drag = dragRef.current;
-      if (!drag) {
-        // not mid-gesture - just update the native tooltip for whichever
-        // shape (if any) is hovered
-        const { shapes, viewport } = useCanvasStore.getState();
-        const canvasPoint = screenToCanvas(toScreenPoint(e, canvas), viewport);
-        const hitId = findShapeAt(canvasPoint, shapes)?.id ?? null;
-        if (hitId !== hoveredShapeIdRef.current) {
-          hoveredShapeIdRef.current = hitId;
-          canvas.title = hitId ? SHAPE_HOVER_HINT : "";
-        }
-        return;
-      }
+      if (!drag) return;
 
       const {
         shapes,
@@ -705,8 +679,6 @@ export const useCanvasInteraction = (
     const handlePointerLeave = () => {
       const awareness = getActiveAwareness();
       if (awareness) setLocalCursor(awareness, null);
-      hoveredShapeIdRef.current = null;
-      canvas.title = "";
     };
 
     window.addEventListener("keydown", handleKeyDown);
