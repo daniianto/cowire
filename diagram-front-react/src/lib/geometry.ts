@@ -99,8 +99,16 @@ const normalizeBox = (
  * width/height. Needed because dragging to create/resize a shape can leave
  * it with negative deltas (e.g. dragging up-and-left, or an arrow endpoint
  * left of its start).
+ *
+ * `shapes` (the full shape map) is optional and only matters for an arrow:
+ * when passed, an attached endpoint is resolved to the target shape's
+ * current edge instead of using the arrow's own stored (possibly stale)
+ * coordinate - see resolveArrowEndpoints.
  */
-export const getBoundingBox = (shape: Shape): BoundingBox => {
+export const getBoundingBox = (
+  shape: Shape,
+  shapes?: Record<string, Shape>
+): BoundingBox => {
   switch (shape.type) {
     case "rectangle":
     case "label":
@@ -112,14 +120,78 @@ export const getBoundingBox = (shape: Shape): BoundingBox => {
         shape.radius * 2,
         shape.radius * 2
       );
-    case "arrow":
-      return normalizeBox(
-        shape.x1,
-        shape.y1,
-        shape.x2 - shape.x1,
-        shape.y2 - shape.y1
-      );
+    case "arrow": {
+      const { x1, y1, x2, y2 } = shapes
+        ? resolveArrowEndpoints(shape, shapes)
+        : shape;
+      return normalizeBox(x1, y1, x2 - x1, y2 - y1);
+    }
   }
+};
+
+const centerOf = (shape: Shape): Point => {
+  const box = getBoundingBox(shape);
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+};
+
+/**
+ * Point on a shape's boundary closest to intersecting the line from its
+ * center towards `towards` - i.e. "the edge of this shape facing that
+ * direction". Used to keep an attached arrow endpoint sitting on the target
+ * shape's edge rather than floating at its center or drifting inside it.
+ */
+export const getEdgePoint = (shape: Shape, towards: Point): Point => {
+  if (shape.type === "circle") {
+    const dx = towards.x - shape.x;
+    const dy = towards.y - shape.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    return {
+      x: shape.x + (dx / dist) * shape.radius,
+      y: shape.y + (dy / dist) * shape.radius,
+    };
+  }
+  // rectangle/label (and arrow, though arrows are never a valid attachment
+  // target): ray-box intersection from the box's center
+  const box = getBoundingBox(shape);
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  const dx = towards.x - cx;
+  const dy = towards.y - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const scaleX = dx !== 0 ? box.width / 2 / Math.abs(dx) : Infinity;
+  const scaleY = dy !== 0 ? box.height / 2 / Math.abs(dy) : Infinity;
+  const scale = Math.min(scaleX, scaleY);
+  return { x: cx + dx * scale, y: cy + dy * scale };
+};
+
+/**
+ * Resolves an arrow's effective endpoints: an attached endpoint (see
+ * ArrowShape.startAttachedToId/endAttachedToId) is recomputed against the
+ * target shape's *current* position/size rather than trusting the arrow's
+ * own stored coordinate, which is only a fallback for an unattached
+ * endpoint or a dangling attachment (target since deleted - self-healing,
+ * see STAGE_8.md). This is called at render/hit-test time, never written
+ * back into the doc.
+ */
+export const resolveArrowEndpoints = (
+  shape: ArrowShape,
+  shapes: Record<string, Shape>
+): { x1: number; y1: number; x2: number; y2: number } => {
+  let { x1, y1, x2, y2 } = shape;
+  const startTarget = shape.startAttachedToId
+    ? shapes[shape.startAttachedToId]
+    : undefined;
+  const endTarget = shape.endAttachedToId
+    ? shapes[shape.endAttachedToId]
+    : undefined;
+
+  const startCenter = startTarget ? centerOf(startTarget) : { x: x1, y: y1 };
+  const endCenter = endTarget ? centerOf(endTarget) : { x: x2, y: y2 };
+
+  if (startTarget) ({ x: x1, y: y1 } = getEdgePoint(startTarget, endCenter));
+  if (endTarget) ({ x: x2, y: y2 } = getEdgePoint(endTarget, startCenter));
+
+  return { x1, y1, x2, y2 };
 };
 
 /** Whether two bounding boxes overlap at all (used for marquee/rubber-band selection). */
@@ -132,7 +204,7 @@ export const doBoxesIntersect = (a: BoundingBox, b: BoundingBox): boolean =>
 /** Bounding box of a group of shapes — the union of their individual boxes. */
 export const getGroupBoundingBox = (shapes: Shape[]): BoundingBox => {
   if (shapes.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
-  const boxes = shapes.map(getBoundingBox);
+  const boxes = shapes.map((s) => getBoundingBox(s));
   const minX = Math.min(...boxes.map((b) => b.x));
   const minY = Math.min(...boxes.map((b) => b.y));
   const maxX = Math.max(...boxes.map((b) => b.x + b.width));
@@ -171,21 +243,26 @@ const ARROW_HIT_THRESHOLD = 6;
  * box would wrongly include its corners); arrows use distance-to-line, since
  * a thin diagonal line's bounding box is mostly empty space.
  */
-export const isPointInShape = (point: Point, shape: Shape): boolean => {
+export const isPointInShape = (
+  point: Point,
+  shape: Shape,
+  shapes?: Record<string, Shape>
+): boolean => {
   switch (shape.type) {
     case "rectangle":
     case "label":
       return isPointInBox(point, getBoundingBox(shape));
     case "circle":
       return distance(point, { x: shape.x, y: shape.y }) <= shape.radius;
-    case "arrow":
+    case "arrow": {
+      const { x1, y1, x2, y2 } = shapes
+        ? resolveArrowEndpoints(shape, shapes)
+        : shape;
       return (
-        distanceToSegment(
-          point,
-          { x: shape.x1, y: shape.y1 },
-          { x: shape.x2, y: shape.y2 }
-        ) <= ARROW_HIT_THRESHOLD
+        distanceToSegment(point, { x: x1, y: y1 }, { x: x2, y: y2 }) <=
+        ARROW_HIT_THRESHOLD
       );
+    }
   }
 };
 
@@ -215,12 +292,14 @@ export const isPointInResizeHandle = (point: Point, shape: Shape): boolean =>
 /** Bounding box of the drag handle at one end of an arrow. */
 export const getArrowHandleBounds = (
   shape: ArrowShape,
-  endpoint: "start" | "end"
+  endpoint: "start" | "end",
+  shapes?: Record<string, Shape>
 ): BoundingBox => {
+  const resolved = shapes ? resolveArrowEndpoints(shape, shapes) : shape;
   const point =
     endpoint === "start"
-      ? { x: shape.x1, y: shape.y1 }
-      : { x: shape.x2, y: shape.y2 };
+      ? { x: resolved.x1, y: resolved.y1 }
+      : { x: resolved.x2, y: resolved.y2 };
   const half = HANDLE_SIZE / 2;
   return {
     x: point.x - half,
@@ -234,8 +313,10 @@ export const getArrowHandleBounds = (
 export const isPointInArrowHandle = (
   point: Point,
   shape: ArrowShape,
-  endpoint: "start" | "end"
-): boolean => isPointInBox(point, getArrowHandleBounds(shape, endpoint));
+  endpoint: "start" | "end",
+  shapes?: Record<string, Shape>
+): boolean =>
+  isPointInBox(point, getArrowHandleBounds(shape, endpoint, shapes));
 
 /**
  * Shifts a shape's geometry by a delta, regardless of its type. Used for

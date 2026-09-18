@@ -2,6 +2,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import {
   doBoxesIntersect,
   getBoundingBox,
+  getEdgePoint,
   isPointInArrowHandle,
   isPointInResizeHandle,
   isPointInShape,
@@ -59,7 +60,7 @@ const findShapeAt = (
   shapes: Record<string, Shape>
 ): Shape | undefined => {
   const inZOrder = Object.values(shapes).sort((a, b) => b.zIndex - a.zIndex);
-  return inZOrder.find((shape) => isPointInShape(point, shape));
+  return inZOrder.find((shape) => isPointInShape(point, shape, shapes));
 };
 
 const toScreenPoint = (
@@ -346,7 +347,9 @@ export const useCanvasInteraction = (
           return;
         }
         if (singleSelected.type === "arrow") {
-          if (isPointInArrowHandle(canvasPoint, singleSelected, "start")) {
+          if (
+            isPointInArrowHandle(canvasPoint, singleSelected, "start", shapes)
+          ) {
             dragRef.current = {
               mode: "resizing-arrow",
               id: singleSelected.id,
@@ -355,7 +358,9 @@ export const useCanvasInteraction = (
             };
             return;
           }
-          if (isPointInArrowHandle(canvasPoint, singleSelected, "end")) {
+          if (
+            isPointInArrowHandle(canvasPoint, singleSelected, "end", shapes)
+          ) {
             dragRef.current = {
               mode: "resizing-arrow",
               id: singleSelected.id,
@@ -616,6 +621,44 @@ export const useCanvasInteraction = (
 
       const shape = shapes[drag.id];
 
+      // hit-tests one arrow endpoint's current point against every other
+      // (non-arrow) shape and binds or unbinds it accordingly - called once
+      // a create/resize-endpoint gesture actually finishes, never mid-drag
+      const resolveArrowAttachment = (
+        id: string,
+        endpoint: "start" | "end"
+      ) => {
+        const arrow = useCanvasStore.getState().shapes[id];
+        if (arrow?.type !== "arrow") return;
+        const point =
+          endpoint === "start"
+            ? { x: arrow.x1, y: arrow.y1 }
+            : { x: arrow.x2, y: arrow.y2 };
+        const otherPoint =
+          endpoint === "start"
+            ? { x: arrow.x2, y: arrow.y2 }
+            : { x: arrow.x1, y: arrow.y1 };
+        const target = Object.values(useCanvasStore.getState().shapes).find(
+          (s) => s.id !== id && s.type !== "arrow" && isPointInShape(point, s)
+        );
+        if (target) {
+          const edge = getEdgePoint(target, otherPoint);
+          updateShape(
+            id,
+            endpoint === "start"
+              ? { startAttachedToId: target.id, x1: edge.x, y1: edge.y }
+              : { endAttachedToId: target.id, x2: edge.x, y2: edge.y }
+          );
+        } else {
+          updateShape(
+            id,
+            endpoint === "start"
+              ? { startAttachedToId: null }
+              : { endAttachedToId: null }
+          );
+        }
+      };
+
       if (
         drag.mode === "creating-box" ||
         drag.mode === "resizing-box" ||
@@ -644,7 +687,12 @@ export const useCanvasInteraction = (
         ) {
           removeShape(drag.id);
           selectShape(null);
+        } else {
+          resolveArrowAttachment(drag.id, "start");
+          resolveArrowAttachment(drag.id, "end");
         }
+      } else if (drag.mode === "resizing-arrow") {
+        resolveArrowAttachment(drag.id, drag.endpoint);
       }
 
       if (

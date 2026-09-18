@@ -9,10 +9,12 @@ import {
   screenToCanvas,
   canvasToScreen,
   getContrastTextColor,
+  resolveArrowEndpoints,
   type RectangleShape,
   type CircleShape,
   type ArrowShape,
   type LabelShape,
+  type Shape,
 } from "../src/lib/geometry";
 
 const rect = (overrides: Partial<RectangleShape> = {}): RectangleShape => ({
@@ -259,5 +261,66 @@ describe("getContrastTextColor", () => {
 
   it("picks white text on a dark background", () => {
     expect(getContrastTextColor("#000000")).toBe("#ffffff");
+  });
+});
+
+describe("resolveArrowEndpoints", () => {
+  it("returns an unattached arrow's raw coordinates unchanged", () => {
+    const shape = arrow({ x1: 0, y1: 0, x2: 100, y2: 0 });
+    expect(resolveArrowEndpoints(shape, { [shape.id]: shape })).toEqual({
+      x1: 0,
+      y1: 0,
+      x2: 100,
+      y2: 0,
+    });
+  });
+
+  it("resolves an endpoint attached to a rectangle onto its edge", () => {
+    const target = rect({ id: "target", x: 200, y: 90, width: 20, height: 20 });
+    const shape = arrow({
+      x1: 0,
+      y1: 100,
+      x2: 999, // stale/irrelevant - target attachment overrides it
+      y2: 999,
+      endAttachedToId: "target",
+    });
+    const shapes: Record<string, Shape> = { [shape.id]: shape, target };
+    const resolved = resolveArrowEndpoints(shape, shapes);
+    // target's box is x:[200,220] y:[90,110], centered at (210,100) -
+    // approaching from (0,100) (straight left) should land on its left edge
+    expect(resolved.x2).toBeCloseTo(200);
+    expect(resolved.y2).toBeCloseTo(100);
+  });
+
+  it("resolves an endpoint attached to a circle onto its edge", () => {
+    const target = circle({ id: "target", x: 200, y: 100, radius: 10 });
+    const shape = arrow({
+      x1: 0,
+      y1: 100,
+      x2: 999,
+      y2: 999,
+      endAttachedToId: "target",
+    });
+    const shapes: Record<string, Shape> = { [shape.id]: shape, target };
+    const resolved = resolveArrowEndpoints(shape, shapes);
+    // approaching from directly left, the edge point is radius away on that side
+    expect(resolved.x2).toBeCloseTo(190);
+    expect(resolved.y2).toBeCloseTo(100);
+  });
+
+  it("falls back to the raw coordinate when the attached shape no longer exists", () => {
+    const shape = arrow({
+      x1: 0,
+      y1: 0,
+      x2: 42,
+      y2: 7,
+      endAttachedToId: "deleted-shape",
+    });
+    expect(resolveArrowEndpoints(shape, { [shape.id]: shape })).toEqual({
+      x1: 0,
+      y1: 0,
+      x2: 42,
+      y2: 7,
+    });
   });
 });

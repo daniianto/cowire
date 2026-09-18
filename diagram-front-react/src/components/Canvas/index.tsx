@@ -49,13 +49,13 @@ export const Canvas = () => {
         (a, b) => a.zIndex - b.zIndex
       );
       for (const shape of inZOrder) {
-        renderShape(ctx, shape);
+        renderShape(ctx, shape, shapes);
       }
       const selectedShapes = selectedIds
         .map((id) => shapes[id])
         .filter((s): s is NonNullable<typeof s> => Boolean(s));
       if (selectedShapes.length === 1) {
-        renderSelectionBox(ctx, selectedShapes[0]);
+        renderSelectionBox(ctx, selectedShapes[0], shapes);
       } else if (selectedShapes.length > 1) {
         renderGroupSelectionBox(ctx, selectedShapes);
       }

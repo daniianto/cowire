@@ -1,6 +1,7 @@
 import {
   getBoundingBox,
   getContrastTextColor,
+  resolveArrowEndpoints,
   type Shape,
 } from "@/lib/geometry";
 
@@ -9,7 +10,8 @@ import {
 // instead of returning JSX
 export const renderShape = (
   ctx: CanvasRenderingContext2D,
-  shape: Shape
+  shape: Shape,
+  shapes: Record<string, Shape>
 ): void => {
   ctx.fillStyle = shape.color;
 
@@ -51,20 +53,24 @@ export const renderShape = (
         );
       }
       break;
-    case "arrow":
-      drawArrow(ctx, shape.x1, shape.y1, shape.x2, shape.y2, shape.color);
+    case "arrow": {
+      // an attached endpoint tracks the target shape's current edge rather
+      // than the arrow's own (possibly stale) stored coordinate
+      const { x1, y1, x2, y2 } = resolveArrowEndpoints(shape, shapes);
+      drawArrow(ctx, x1, y1, x2, y2, shape.color);
       if (shape.label) {
         // no fill behind an arrow's label to contrast against, so it always
         // uses a fixed dark color rather than getContrastTextColor
         drawCenteredLabel(
           ctx,
           shape.label,
-          (shape.x1 + shape.x2) / 2,
-          (shape.y1 + shape.y2) / 2,
+          (x1 + x2) / 2,
+          (y1 + y2) / 2,
           "#0f172a"
         );
       }
       break;
+    }
   }
 };
 

@@ -31,7 +31,8 @@ const strokeDashedBox = (
 /** Selection outline + resize handle(s) for a single selected shape. */
 export const renderSelectionBox = (
   ctx: CanvasRenderingContext2D,
-  shape: Shape
+  shape: Shape,
+  allShapes: Record<string, Shape>
 ): void => {
   if (shape.type === "circle") {
     ctx.save();
@@ -43,14 +44,14 @@ export const renderSelectionBox = (
     ctx.stroke();
     ctx.restore();
   } else {
-    strokeDashedBox(ctx, getBoundingBox(shape));
+    strokeDashedBox(ctx, getBoundingBox(shape, allShapes));
   }
 
   // arrows resize from either endpoint; everything else resizes from one
   // bottom-right corner handle
   if (shape.type === "arrow") {
-    drawHandle(ctx, getArrowHandleBounds(shape, "start"));
-    drawHandle(ctx, getArrowHandleBounds(shape, "end"));
+    drawHandle(ctx, getArrowHandleBounds(shape, "start", allShapes));
+    drawHandle(ctx, getArrowHandleBounds(shape, "end", allShapes));
   } else {
     drawHandle(ctx, getResizeHandleBounds(shape));
   }
