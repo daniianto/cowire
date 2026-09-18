@@ -6,7 +6,6 @@ import { useDiagramRealtime } from "@/hooks/useDiagramRealtime";
 import { useDiagramAutosave } from "@/hooks/useDiagramAutosave";
 import { AuthForm } from "@/components/AuthForm";
 import { Canvas } from "@/components/Canvas";
-import { ShapeHoverHint } from "@/components/ShapeHoverHint";
 import { SaveDialog } from "@/components/SaveDialog";
 import { DiagramList } from "@/components/DiagramList";
 import { PresenceIndicator } from "@/components/PresenceIndicator";
@@ -55,7 +54,6 @@ export const App = () => {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <Canvas />
       <RemoteCursors peers={peers} />
-      <ShapeHoverHint />
       <div
         style={{
           position: "absolute",

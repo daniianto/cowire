@@ -1,7 +1,6 @@
 export * from "./ShapeRenderer";
 export * from "./SelectionBox";
 export * from "./Canvas";
-export * from "./ShapeHoverHint";
 export * from "./AuthForm";
 export * from "./SaveDialog";
 export * from "./DiagramList";
