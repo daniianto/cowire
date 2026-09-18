@@ -8,4 +8,5 @@ export * from "./PresenceIndicator";
 export * from "./RemoteCursors";
 export * from "./Toolbar";
 export * from "./Inspector";
+export * from "./LayerTree";
 export * from "./App";

@@ -18,12 +18,16 @@ export const Inspector = () => {
   const showLabelField = shape.type !== "label";
 
   return (
+    // pointer-events-none on the wrapper (with pointer-events-auto on just
+    // the actual controls) so this floating panel doesn't block canvas
+    // drags that happen to start over its padding/background - e.g.
+    // drawing a new shape near wherever the panel is currently positioned
     <div
-      className="flex flex-col gap-2 rounded-lg border bg-background p-2 shadow-sm"
+      className="pointer-events-none flex flex-col gap-2 rounded-lg border bg-background p-2 shadow-sm"
       style={{ position: "absolute", top: 8, left: 8 }}
     >
       <div className="flex items-center gap-2">
-        <Label htmlFor="shape-color" className="text-xs">
+        <Label htmlFor="shape-color" className="pointer-events-none text-xs">
           Color
         </Label>
         <input
@@ -32,12 +36,12 @@ export const Inspector = () => {
           value={shape.color}
           onFocus={() => stopCapturing()}
           onChange={(e) => updateShape(shape.id, { color: e.target.value })}
-          className="h-7 w-10 cursor-pointer rounded border"
+          className="pointer-events-auto h-7 w-10 cursor-pointer rounded border"
         />
       </div>
       {showLabelField && (
         <div className="flex items-center gap-2">
-          <Label htmlFor="shape-label" className="text-xs">
+          <Label htmlFor="shape-label" className="pointer-events-none text-xs">
             Label
           </Label>
           <Input
@@ -45,7 +49,7 @@ export const Inspector = () => {
             value={shape.label ?? ""}
             onFocus={() => stopCapturing()}
             onChange={(e) => updateShape(shape.id, { label: e.target.value })}
-            className="h-7 w-32"
+            className="pointer-events-auto h-7 w-32"
           />
         </div>
       )}

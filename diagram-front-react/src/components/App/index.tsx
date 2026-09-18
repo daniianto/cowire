@@ -8,6 +8,7 @@ import { AuthForm } from "@/components/AuthForm";
 import { Canvas } from "@/components/Canvas";
 import { SaveDialog } from "@/components/SaveDialog";
 import { DiagramList } from "@/components/DiagramList";
+import { LayerTree } from "@/components/LayerTree";
 import { PresenceIndicator } from "@/components/PresenceIndicator";
 import { RemoteCursors } from "@/components/RemoteCursors";
 import { Toolbar } from "@/components/Toolbar";
@@ -76,6 +77,7 @@ export const App = () => {
           onSaved={setCurrentDiagramId}
         />
         <DiagramList onSelect={setCurrentDiagramId} />
+        <LayerTree />
         {currentDiagramId && (
           <Button variant="outline" size="sm" onClick={handleCopyLink}>
             Copy Link
