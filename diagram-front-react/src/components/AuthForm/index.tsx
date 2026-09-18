@@ -14,14 +14,21 @@ export const AuthForm = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // set after a sign-up call that returned no session - email confirmation
+  // is required before the account can actually sign in
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      if (mode === "sign-in") await signIn(email, password);
-      else await signUp(email, password);
+      if (mode === "sign-in") {
+        await signIn(email, password);
+      } else {
+        const session = await signUp(email, password);
+        if (!session) setConfirmationSent(true);
+      }
     } catch (err) {
       // a rejected sign-in/sign-up is tied directly to this submit action,
       // so it renders as an inline block rather than a toast
@@ -30,6 +37,30 @@ export const AuthForm = () => {
       setSubmitting(false);
     }
   };
+
+  if (confirmationSent) {
+    return (
+      <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+        <h1 className="text-lg font-medium">Check your email</h1>
+        <Alert>
+          <AlertDescription>
+            We sent a confirmation link to {email}. Follow it to activate your
+            account, then sign in.
+          </AlertDescription>
+        </Alert>
+        <button
+          type="button"
+          className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+          onClick={() => {
+            setConfirmationSent(false);
+            setMode("sign-in");
+          }}
+        >
+          Back to sign in
+        </button>
+      </div>
+    );
+  }
 
   return (
     <form
