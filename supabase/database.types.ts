@@ -69,7 +69,20 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      get_shared_diagram: {
+        Args: { diagram_id: string };
+        Returns: {
+          crdt_state: string;
+          data: Json;
+          id: string;
+          name: string;
+          updated_at: string;
+        }[];
+      };
+      update_shared_diagram: {
+        Args: { diagram_id: string; new_crdt_state: string; new_data: Json };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;
