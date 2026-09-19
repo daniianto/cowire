@@ -53,7 +53,13 @@ export const subscribeToDiagram = (
   awareness: Awareness,
   handlers: DiagramDocHandlers = {}
 ): DiagramDocConnection => {
-  const channel = client.channel(`diagram:${diagramId}`);
+  // a private channel is required for Realtime Authorization (the
+  // authorize_diagram_realtime_channels migration's realtime.messages
+  // policies) to apply at all - without it, Realtime doesn't check RLS and
+  // anyone holding the anon key could join regardless of sign-in
+  const channel = client.channel(`diagram:${diagramId}`, {
+    config: { private: true },
+  });
 
   let pendingUpdates: Uint8Array[] = [];
   let docFlushTimeout: ReturnType<typeof setTimeout> | null = null;
