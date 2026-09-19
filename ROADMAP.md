@@ -11,6 +11,7 @@ Performance is a first-class goal: co-op editing must stay fast as shape count a
 7. **Polish** — reconnect handling, group-delete edge cases, presence UI, touch/mobile canvas input
 8. **Diagramming features** — re-save an already-saved diagram in place, a layer tree panel, arrows that anchor to a shape's edge and follow it, per-shape color + an optional label property (not the standalone Label shape)
 9. **Documentation** — README with trade-offs, Table of Contents, Known Issues, Design Decisions
+10. **Secure diagram sharing** — not originally planned; a security review of the migrations/RLS found that "anyone with the link" sharing was enforced as "anyone authenticated," not "anyone who has this specific id." Replaces non-owner table access with token-scoped RPCs and adds Realtime channel authorization
 
 **CI/Deploy**: GitHub Actions runs lint/format/test on every push, starting Stage 1 — not gated behind a later stage. Hosting target is GitHub Pages (static frontend, Supabase as the external backend); the deploy workflow itself is added once Stage 3 (persistence) makes the app worth shipping.
 
