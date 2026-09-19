@@ -52,14 +52,18 @@ export const listDiagrams = async (
   }));
 };
 
+// non-owner load/save go through get_shared_diagram/update_shared_diagram
+// (SECURITY DEFINER functions - see Stage 10's secure_diagram_sharing
+// migration) instead of the `diagrams` table directly: RLS can't express
+// "only if you already knew this specific id" for a raw SELECT/UPDATE, so
+// the table itself is owner-only now. The owner routes through the same
+// functions too, rather than keeping a second, owner-only code path.
 export const loadDiagram = async (
   client: DiagramSupabaseClient,
   id: string
 ): Promise<DiagramRecord> => {
   const { data, error } = await client
-    .from("diagrams")
-    .select("id, name, data, crdt_state, updated_at")
-    .eq("id", id)
+    .rpc("get_shared_diagram", { diagram_id: id })
     .single();
   if (error) throw error;
   return {
@@ -92,15 +96,13 @@ export const updateDiagram = async (
   id: string,
   data: Json,
   crdtState: Uint8Array
-): Promise<DiagramSummary> => {
-  const { data: row, error } = await client
-    .from("diagrams")
-    .update({ data, crdt_state: bytesToHex(crdtState) })
-    .eq("id", id)
-    .select("id, name, updated_at")
-    .single();
+): Promise<void> => {
+  const { error } = await client.rpc("update_shared_diagram", {
+    diagram_id: id,
+    new_data: data,
+    new_crdt_state: bytesToHex(crdtState),
+  });
   if (error) throw error;
-  return { id: row.id, name: row.name, updatedAt: row.updated_at };
 };
 
 /** Autosave-only write: refreshes just the CRDT snapshot, leaving `data`/`name` untouched. */
@@ -109,10 +111,11 @@ export const saveDiagramSnapshot = async (
   id: string,
   crdtState: Uint8Array
 ): Promise<void> => {
-  const { error } = await client
-    .from("diagrams")
-    .update({ crdt_state: bytesToHex(crdtState) })
-    .eq("id", id);
+  const { error } = await client.rpc("update_shared_diagram", {
+    diagram_id: id,
+    new_data: null,
+    new_crdt_state: bytesToHex(crdtState),
+  });
   if (error) throw error;
 };
 
